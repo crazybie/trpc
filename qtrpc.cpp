@@ -18,7 +18,7 @@ namespace trpc
                     input >> packageSize;   // read block size.
                 }
                 if ( packageSize > 0 && clientSocket->bytesAvailable() >= packageSize ) {
-                    rpc.onReceive(input);
+                    onReceive(input);
                     packageSize = 0;
                 }
                 else {
@@ -27,7 +27,7 @@ namespace trpc
             }
         });
 
-        rpc.send = [this]() {
+        send = [this]() {
             int sz = block.size();
             QByteArray b;
             QDataStream s(&b, QIODevice::WriteOnly);
@@ -42,14 +42,8 @@ namespace trpc
         clientSocket->connectToHost(ip.c_str(), port);
     }
 
-
-    QtRpcServer* QtRpcServer::instance;
-
-
     void QtRpcServer::startListen(int port)
     {
-        instance = this;
-
         serverSocket = new QTcpServer(this);
 
         connect(serverSocket, &QTcpServer::newConnection, [this] {
@@ -57,7 +51,7 @@ namespace trpc
             auto& session = sessions[sessionID];
             session.sid = sessionID++;
             session.client = serverSocket->nextPendingConnection();
-            rpcServer.addSession(session.sid, session.output);
+            addSession(session.sid, session.output);
 
             connect(session.client, &QTcpSocket::readyRead, [this, &session] {
                 QDataStream input(session.client);
@@ -66,7 +60,7 @@ namespace trpc
                         input >> session.packageSize;   // read block size.
                     }
                     if ( session.packageSize && session.client->bytesAvailable() >= session.packageSize ) {
-                        rpcServer.onReceive(session.sid, input);
+                        onReceive(session.sid, input);
                         session.packageSize = 0;
                     }
                     else {
@@ -77,12 +71,12 @@ namespace trpc
 
             connect(session.client, &QAbstractSocket::disconnected, [this, &session] {
                 if ( destoryed )return;
-                rpcServer.removeSession(session.sid);
+                removeSession(session.sid);
                 sessions.erase(session.sid);
             });
         });
 
-        rpcServer.send = [this](SessionID sid) {
+        send = [this](SessionID sid) {
             if ( sessions.find(sid) == sessions.end() ) return;
 
             auto& session = sessions[sid];
@@ -97,7 +91,7 @@ namespace trpc
             session.output.device()->reset();
         };
 
-        rpcServer.init();
+        init();
         serverSocket->listen(QHostAddress::Any, port);
     }
 

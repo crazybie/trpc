@@ -23,32 +23,21 @@ namespace trpc
     }
 
 
-    class QtRpcClient : public QObject
+    class QtRpcClient : public QObject, public RpcClient<QDataStream>
     {
         Q_OBJECT
     public:
-        using QObject::QObject;
+        QtRpcClient(QObject* parent): RpcClient(output){}
         void connectServer(string ip, int port, function<void()> connected);
-        template<typename... A>
-        auto call(A... a)
-        {
-            return rpc.call(a...);
-        }
-        template<typename... A>
-        void onEvent(A... a)
-        {
-            return rpc.onEvent(a...);
-        }
     private:
         int packageSize = 0;
         QTcpSocket* clientSocket;
         QByteArray  block;
-        QDataStream output{ &block, QIODevice::WriteOnly };
-        RpcClient<QDataStream> rpc{ output };
+        QDataStream output{ &block, QIODevice::WriteOnly };        
     };
 
 
-    class QtRpcServer : public QObject
+    class QtRpcServer : public QObject, public RpcServer<QDataStream>
     {
         Q_OBJECT
     public:
@@ -60,7 +49,7 @@ namespace trpc
         }
         static QtRpcServer* get()
         {
-            return instance;
+            return (QtRpcServer*)RpcServer::get();
         }
         auto& getSessoins()
         {
@@ -86,8 +75,6 @@ namespace trpc
         };
         map<int, Session> sessions;
         int sessionID = 100;
-        RpcServer<QDataStream>& rpcServer{ RpcServer<QDataStream>::get() };
-        static QtRpcServer* instance;
     };
 
     inline auto& getSession(SessionID sid) { return QtRpcServer::get()->getSessoins()[sid]; }

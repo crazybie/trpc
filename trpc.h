@@ -154,6 +154,10 @@ namespace trpc
         Signal send;
         Signal disconnected;
 
+        RpcServer()
+        {
+            get() = this;
+        }
         void addHandler(string n, Handler* h)
         {
             m_handlers[n] = h;
@@ -183,22 +187,22 @@ namespace trpc
                 i.second->init();
         }
         template<typename... A>
-        void pushMsg(SessionID sid, string event, A... a)
+        static void pushMsg(SessionID sid, string event, A... a)
         {
-            if ( sessions.find(sid) == sessions.end() )return;
+            auto& s = *get();
+            if ( s.sessions.find(sid) == s.sessions.end() )return;
 
-            auto& o = *sessions[sid].output;
+            auto& o = *s.sessions[sid].output;
             o << TPRC_DELIMITER(PUSH_REQUEST_ID) << TPRC_DELIMITER(event);
             auto t = { ( o << a, 1 )... };
-            if ( send ) send(sid);
+            if ( s.send ) s.send(sid);
         }
-        static RpcServer& get()
+        static RpcServer*& get()
         {
-            static RpcServer s;
+            static RpcServer* s;
             return s;
         }
     private:
-        RpcServer() = default;
         struct Session
         {
             SessionID sid;
@@ -217,7 +221,7 @@ namespace trpc
         using RpcServer = RpcServer<istream, ostream>;
         RpcHandler(string name)
         {
-            RpcServer::get().addHandler(name, &instance);
+            RpcServer::get()->addHandler(name, &instance);
         }
         static T& get()
         {
