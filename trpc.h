@@ -21,14 +21,9 @@ namespace trpc
 
     namespace imp
     {
-        template<typename R, typename C, typename F, size_t... idx, typename... A>
-        R invoke(C* c, F f, index_sequence<idx...>, tuple<A...>& a)
-        {
-            return ( c->*f )( get<idx>(a)... );
-        }
 
-        template<typename R, typename F, size_t... idx, typename... A>
-        R invoke(F f, index_sequence<idx...>, tuple<A...>& a)
+        template<typename F, size_t... idx, typename... A>
+        auto invoke(F f, index_sequence<idx...>, tuple<A...>& a)
         {
             return f(get<idx>(a)...);
         }
@@ -47,14 +42,13 @@ namespace trpc
             (void)t;
         }
 
-        template<typename Idx, typename... A>
+        template<typename Idx, typename Tuple>
         struct tuple_elems;
-
-        template<typename... A, size_t... I>
-        struct tuple_elems<index_sequence<I...>, A...>
+        
+        template<typename Tuple, size_t... I>
+        struct tuple_elems<index_sequence<I...>, Tuple>
         {
-            using T = tuple<A...>;
-            using type = tuple<tuple_element_t<I, T>...>;
+            using type = tuple<tuple_element_t<I, Tuple>...>;
         };
 
         template<typename T>
@@ -110,25 +104,32 @@ namespace trpc
         template<typename C, typename R, typename... A>
         void addFunction(string name, R(C::*mf)( A... ))
         {
+            addFunction(name, [this, mf](A... a) { 
+                return ( static_cast<C*>(this)->*mf )( a... ); 
+            });
+        }
+        template<typename Func>
+        void addFunction(string name, Func f)
+        {
             using namespace imp;
-            using AllArgs = tuple<A...>;
-            using Args = tuple_elems<make_index_sequence<sizeof...(A)-1>, A...>::type;
-            using CB = tuple_element_t<sizeof...(A)-1, AllArgs>;
+            using AllArgs = typename FuncTrait<Func>::Args;
+            constexpr int argCnt = tuple_size<AllArgs>::value;
+            using Args = tuple_elems<make_index_sequence<argCnt - 1>, AllArgs>::type;
+            using CB = tuple_element_t<argCnt - 1, AllArgs>;
             using CBArgs = typename FuncTrait<CB>::Args;
-            using MF2 = R(Handler::*) ( A... );
-
+            
             funcs[name] = [=](SessionID sid, istream& i, ostream& o, Signal done) {
                 int reqID;
                 i >> reqID;
                 Args args;
                 get<0>(args) = sid;
-                readTuple<1>(i, args, make_index_sequence<sizeof...(A)-2>());
+                constexpr int argCnt = tuple_size<AllArgs>::value;
+                readTuple<1>(i, args, make_index_sequence<argCnt - 2>());
                 CB cb = genTupleSerializer(CBArgs(), reqID, o, done, sid);
                 auto args2 = tuple_cat(args, tie(cb));
-                invoke<void>(this, (MF2)mf, index_sequence_for<A...>(), args2);
+                invoke(f, make_index_sequence<argCnt>(), args2);
             };
         }
-
         struct Reg
         {
             template<typename T>
@@ -256,7 +257,7 @@ namespace trpc
             using namespace imp;
             using AllArgs = tuple<A...>;
             constexpr int argCnt = sizeof...(A)-1;
-            using Args = tuple_elems<make_index_sequence<argCnt>, A...>::type;
+            using Args = tuple_elems<make_index_sequence<argCnt>, AllArgs>::type;
             using CB = tuple_element_t<argCnt, AllArgs>;
             using CBArgs = typename FuncTrait<CB>::Args;
 
@@ -272,7 +273,7 @@ namespace trpc
                 CBArgs args;
                 auto idx = make_index_sequence<tuple_size<CBArgs>::value>();
                 readTuple<0>(i, args, idx);
-                invoke<void>(cb, idx, args);
+                invoke(cb, idx, args);
             };
             writeTuple(output, args, make_index_sequence<argCnt>());
             if ( send ) send();
@@ -301,7 +302,7 @@ namespace trpc
                 Args args;
                 auto idx = make_index_sequence<tuple_size<Args>::value>();
                 readTuple<0>(input, args, idx);
-                invoke<void>(f, idx, args);
+                invoke(f, idx, args);
             };
         }
 
