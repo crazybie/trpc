@@ -158,9 +158,9 @@ namespace trpc
         {
             get() = this;
         }
-        void addHandler(string n, Handler* h)
+        static void addHandler(string n, Handler* h)
         {
-            m_handlers[n] = h;
+            handlers()[n] = h;
         }
         void addSession(SessionID sid, ostream& o)
         {
@@ -168,22 +168,22 @@ namespace trpc
         }
         void removeSession(SessionID sid)
         {
-            if ( disconnected) disconnected(sid);
+            if ( disconnected ) disconnected(sid);
             sessions.erase(sid);
         }
         void onReceive(SessionID sid, istream& i)
         {
             if ( sessions.find(sid) == sessions.end() )return;
 
-            auto& session = sessions[sid];            
+            auto& session = sessions[sid];
             auto& o = session.output;
             string func, handler;
-            i >> handler >> func;            
-            m_handlers[handler]->onRequest(sid, func, i, *o, send);
+            i >> handler >> func;
+            handlers()[handler]->onRequest(sid, func, i, *o, send);
         }
-        void init()
+        void initHandlers()
         {
-            for ( auto i : m_handlers )
+            for ( auto i : handlers() )
                 i.second->init();
         }
         template<typename... A>
@@ -202,6 +202,11 @@ namespace trpc
             static RpcServer* s;
             return s;
         }
+        static auto& handlers()
+        {
+            static map<string, Handler*> s;
+            return s;
+        }
     private:
         struct Session
         {
@@ -209,7 +214,6 @@ namespace trpc
             ostream* output;
         };
         map<SessionID, Session> sessions;
-        map<string, Handler*> m_handlers;
     };
 
 
@@ -221,7 +225,7 @@ namespace trpc
         using RpcServer = RpcServer<istream, ostream>;
         RpcHandler(string name)
         {
-            RpcServer::get()->addHandler(name, &instance);
+            RpcServer::addHandler(name, &instance);
         }
         static T& get()
         {

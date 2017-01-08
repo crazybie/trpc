@@ -51,7 +51,7 @@ namespace trpc
         {
             return (QtRpcServer*)RpcServer::get();
         }
-        auto& getSessoins()
+        auto& getSessions()
         {
             return sessions;
         }
@@ -77,7 +77,7 @@ namespace trpc
         int sessionID = 100;
     };
 
-    inline auto& getSession(SessionID sid) { return QtRpcServer::get()->getSessoins()[sid]; }
+    inline auto& getSession(SessionID sid) { return QtRpcServer::get()->getSessions()[sid]; }
 
     template<typename T>
     class QtRpcHandler : public RpcHandler<T, QDataStream>

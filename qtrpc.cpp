@@ -1,6 +1,5 @@
 #include "qtrpc.h"
 
-using namespace std;
 
 namespace trpc
 {
@@ -91,7 +90,7 @@ namespace trpc
             session.output.device()->reset();
         };
 
-        init();
+        initHandlers();
         serverSocket->listen(QHostAddress::Any, port);
     }
 
