@@ -139,7 +139,6 @@ namespace trpc
             }
         };
     private:
-        string name;
         map<string, Func> funcs;
     };
 
@@ -218,30 +217,6 @@ namespace trpc
     };
 
 
-    template<typename T, typename istream, typename ostream = istream>
-    class RpcHandler : public Handler<istream, ostream>
-    {
-    public:
-        using Sub = T;
-        using RpcServer = RpcServer<istream, ostream>;
-        RpcHandler(string name)
-        {
-            RpcServer::addHandler(name, &instance);
-        }
-        static T& get()
-        {
-            return instance;
-        }
-    private:
-        static T instance;
-    };
-
-    template<typename T, typename istream, typename ostream>
-    T RpcHandler<T, istream, ostream>::instance;
-
-#define TRPC(name) Reg __##name{#name, &Sub::name};
-
-
     template<typename istream, typename ostream = istream>
     class RpcClient
     {
@@ -313,4 +288,28 @@ namespace trpc
         int nextRequestID = NORMAL_REUQEST_ID;
         ostream& output;
     };
+
+
+    template<typename T, typename istream, typename ostream = istream>
+    class RpcHandler : public Handler<istream, ostream>
+    {
+    public:
+        using Sub = T;
+        using RpcServer = RpcServer<istream, ostream>;
+        RpcHandler(string name)
+        {
+            RpcServer::addHandler(name, &instance);
+        }
+        static T& get()
+        {
+            return instance;
+        }
+    private:
+        static T instance;
+    };
+
+    template<typename T, typename istream, typename ostream>
+    T RpcHandler<T, istream, ostream>::instance;
+
+#define TRPC(name) Reg __##name{#name, &Sub::name};
 }
