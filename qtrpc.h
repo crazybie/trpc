@@ -6,6 +6,30 @@
 #include <QtNetwork>
 #include "trpc.h"
 
+inline QDataStream& operator<<(QDataStream& s, QVariant& v)
+{
+    s << (int)v.type();
+    switch ( v.type() ) {
+    case QVariant::Int: s << v.toInt(); break;
+    case QVariant::Double: s << v.toFloat(); break;
+    case QVariant::String: s << v.toString(); break;
+    case QVariant::Bool: s << v.toBool(); break;
+    }
+    return s;
+}
+inline QDataStream& operator >> (QDataStream& s, QVariant& v)
+{
+    int type;
+    s >> type;
+    switch ( type ) {
+    case QVariant::Int: { int i; s >> i; v.setValue(i); break; }
+    case QVariant::Double: { double i; s >> i; v.setValue(i); break; }
+    case QVariant::String: { QString i; s >> i; v.setValue(i); break; }
+    case QVariant::Bool: { bool i; s >> i; v.setValue(i); break; }
+    }
+    return s;
+}
+
 namespace trpc
 {
     inline QDataStream& operator >> (QDataStream& s, std::string& v)
@@ -21,6 +45,7 @@ namespace trpc
     {
         return s << v.c_str();
     }
+
 
 
     class QtRpcClient : public QObject, public RpcClient<QDataStream>
