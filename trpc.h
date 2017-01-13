@@ -44,7 +44,7 @@ namespace trpc
 
         template<typename Idx, typename Tuple>
         struct tuple_elems;
-        
+
         template<typename Tuple, size_t... I>
         struct tuple_elems<index_sequence<I...>, Tuple>
         {
@@ -78,7 +78,7 @@ namespace trpc
 
     template<typename... A>
     using Resp = function<void(A...)>;
-    
+
 
     template<typename istream, typename ostream = istream>
     class Handler
@@ -86,17 +86,8 @@ namespace trpc
     public:
         using Func = function<void(SessionID, istream&, ostream&, Signal)>;
 
-        Handler()
-        {
-            getCurrent() = this;
-        }
         virtual void init()
         {}
-        static Handler*& getCurrent()
-        {
-            static Handler* s;
-            return s;
-        }
         void onRequest(SessionID sid, string name, istream& data, ostream& o, Signal done)
         {
             funcs[name](sid, data, o, done);
@@ -104,8 +95,8 @@ namespace trpc
         template<typename C, typename R, typename... A>
         void addFunction(string name, R(C::*mf)( A... ))
         {
-            addFunction(name, [this, mf](A... a) { 
-                return ( static_cast<C*>(this)->*mf )( a... ); 
+            addFunction(name, [this, mf](A... a) {
+                return ( static_cast<C*>( this )->*mf )( a... );
             });
         }
         template<typename Func>
@@ -117,7 +108,7 @@ namespace trpc
             using Args = tuple_elems<make_index_sequence<argCnt - 1>, AllArgs>::type;
             using CB = tuple_element_t<argCnt - 1, AllArgs>;
             using CBArgs = typename FuncTrait<CB>::Args;
-            
+
             funcs[name] = [=](SessionID sid, istream& i, ostream& o, Signal done) {
                 int reqID;
                 i >> reqID;
@@ -133,9 +124,9 @@ namespace trpc
         struct Reg
         {
             template<typename T>
-            Reg(string n, T t)
+            Reg(Handler* h, string n, T t)
             {
-                getCurrent()->addFunction(n, t);
+                h->addFunction(n, t);
             }
         };
     private:
@@ -224,8 +215,7 @@ namespace trpc
         function<void()> send;
 
         RpcClient(ostream& o) :output(o)
-        {
-        }
+        {}
         template<typename... A>
         void call(string name, A... a)
         {
@@ -282,7 +272,7 @@ namespace trpc
         }
 
     private:
-        using Func = function<void(istream& i)>;        
+        using Func = function<void(istream& i)>;
         map<int, Func> requests;
         map<string, function<void(istream&)>> pushHandlers;
         int nextRequestID = NORMAL_REUQEST_ID;
@@ -311,5 +301,5 @@ namespace trpc
     template<typename T, typename istream, typename ostream>
     T RpcHandler<T, istream, ostream>::instance;
 
-#define TRPC(name) Reg __##name{#name, &Sub::name};
+#define TRPC(name) Reg __##name{this, #name, &Sub::name};
 }
