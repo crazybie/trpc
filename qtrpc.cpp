@@ -69,7 +69,7 @@ namespace trpc
             });
 
             connect(session.client, &QAbstractSocket::disconnected, [this, &session] {
-                if ( destoryed )return;
+                if ( destoryed ) return;
                 removeSession(session.sid);
                 sessions.erase(session.sid);
             });

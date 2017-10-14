@@ -17,289 +17,296 @@
 
 namespace trpc
 {
-    using namespace std;
+	using namespace std;
 
-    namespace imp
-    {
+	namespace imp
+	{
 
-        template<typename F, size_t... idx, typename... A>
-        auto invoke(F f, index_sequence<idx...>, tuple<A...>& a)
-        {
-            return f(get<idx>(a)...);
-        }
+		template<typename F, size_t... idx, typename... A>
+		auto invoke(F f, index_sequence<idx...>, tuple<A...>& a)
+		{
+			return f(get<idx>(a)...);
+		}
 
-        template<int offset, typename istream, typename Tuple, size_t... idx>
-        void readTuple(istream& i, Tuple& d, index_sequence<idx...>)
-        {
-            auto t = { ( i >> get<idx + offset>(d), 1 )... };
-            (void)t;
-        }
+		template<int offset, typename istream, typename Tuple, size_t... idx>
+		void readTuple(istream& i, Tuple& d, index_sequence<idx...>)
+		{
+			auto t = { (i >> get<idx + offset>(d), 1)... };
+			(void)t;
+		}
 
-        template<typename ostream, typename Tuple, size_t... idx >
-        void writeTuple(ostream& o, Tuple& d, index_sequence<idx...>)
-        {
-            auto t = { ( o << TPRC_DELIMITER(get<idx>(d)), 1 )... };
-            (void)t;
-        }
+		template<typename ostream, typename Tuple, size_t... idx >
+		void writeTuple(ostream& o, Tuple& d, index_sequence<idx...>)
+		{
+			auto t = { (o << TPRC_DELIMITER(get<idx>(d)), 1)... };
+			(void)t;
+		}
 
-        template<typename Idx, typename Tuple>
-        struct tuple_elems;
+		template<typename Idx, typename Tuple>
+		struct tuple_elems;
 
-        template<typename Tuple, size_t... I>
-        struct tuple_elems<index_sequence<I...>, Tuple>
-        {
-            using type = tuple<tuple_element_t<I, Tuple>...>;
-        };
+		template<typename Tuple, size_t... I>
+		struct tuple_elems<index_sequence<I...>, Tuple>
+		{
+			using type = tuple<tuple_element_t<I, Tuple>...>;
+		};
 
-        template<typename T>
-        struct FuncTrait : FuncTrait<decltype( &T::operator() )>
-        {};
+		template<typename T>
+		struct FuncTrait : FuncTrait<decltype(&T::operator())>
+		{};
 
-        template<typename R, typename C, typename... A>
-        struct FuncTrait<R(C::*)( A... )const>
-        {
-            using Args = tuple<A...>;
-        };
+		template<typename R, typename C, typename... A>
+		struct FuncTrait<R(C::*)(A...)const>
+		{
+			using Args = tuple<A...>;
+		};
 
-        template<typename ostream, typename CB, typename CBArg, typename...A>
-        auto genTupleSerializer(tuple<A...>, int tag, ostream& o, CB& cb, CBArg cbArg)
-        {
-            return [&, tag, cb, cbArg](A...a) {
-                o << TPRC_DELIMITER(tag);
-                auto i = { ( o << TPRC_DELIMITER(a), 1 )... };
-                (void)i;
-                if ( cb ) cb(cbArg);
-            };
-        }
-    }
+		template<typename ostream, typename CB, typename CBArg, typename...A>
+		auto genTupleSerializer(tuple<A...>, int tag, ostream& o, CB& cb, CBArg cbArg)
+		{
+			return [&, tag, cb, cbArg](A...a) {
+				o << TPRC_DELIMITER(tag);
+				auto i = { (o << TPRC_DELIMITER(a), 1)... };
+				(void)i;
+				if (cb) cb(cbArg);
+			};
+		}
+	}
 
-    using SessionID = int;
-    using Signal = function<void(SessionID)>;
+	using SessionID = int;
+	using Signal = function<void(SessionID)>;
 
-    template<typename... A>
-    using Resp = function<void(A...)>;
-
-
-    template<typename istream, typename ostream = istream>
-    class Handler
-    {
-    public:
-        using Func = function<void(SessionID, istream&, ostream&, Signal)>;
-
-        virtual void init()
-        {}
-        void onRequest(SessionID sid, string name, istream& data, ostream& o, Signal done)
-        {
-            funcs[name](sid, data, o, done);
-        }
-        template<typename C, typename R, typename... A>
-        void addFunction(string name, R(C::*mf)( A... ))
-        {
-            addFunction(name, [this, mf](A... a) {
-                return ( static_cast<C*>( this )->*mf )( a... );
-            });
-        }
-        template<typename Func>
-        void addFunction(string name, Func f)
-        {
-            using namespace imp;
-            using AllArgs = typename FuncTrait<Func>::Args;
-            constexpr int argCnt = tuple_size<AllArgs>::value;
-            using Args = tuple_elems<make_index_sequence<argCnt - 1>, AllArgs>::type;
-            using CB = tuple_element_t<argCnt - 1, AllArgs>;
-            using CBArgs = typename FuncTrait<CB>::Args;
-
-            funcs[name] = [=](SessionID sid, istream& i, ostream& o, Signal done) {
-                int reqID;
-                i >> reqID;
-                Args args;
-                get<0>(args) = sid;
-                constexpr int argCnt = tuple_size<AllArgs>::value;
-                readTuple<1>(i, args, make_index_sequence<argCnt - 2>());
-                CB cb = genTupleSerializer(CBArgs(), reqID, o, done, sid);
-                auto args2 = tuple_cat(args, tie(cb));
-                invoke(f, make_index_sequence<argCnt>(), args2);
-            };
-        }
-        struct Reg
-        {
-            template<typename T>
-            Reg(Handler* h, string n, T t)
-            {
-                h->addFunction(n, t);
-            }
-        };
-    private:
-        map<string, Func> funcs;
-    };
-
-    const int PUSH_REQUEST_ID = 1;
-    const int NORMAL_REUQEST_ID = 2;
-
-    template<typename istream, typename ostream = istream>
-    class RpcServer
-    {
-    public:
-        using Handler = Handler<istream, ostream>;
-
-        Signal send;
-        Signal disconnected;
-
-        RpcServer()
-        {
-            get() = this;
-        }
-        static void addHandler(string n, Handler* h)
-        {
-            handlers()[n] = h;
-        }
-        void addSession(SessionID sid, ostream& o)
-        {
-            sessions[sid] = { sid, &o };
-        }
-        void removeSession(SessionID sid)
-        {
-            if ( disconnected ) disconnected(sid);
-            sessions.erase(sid);
-        }
-        void onReceive(SessionID sid, istream& i)
-        {
-            if ( sessions.find(sid) == sessions.end() )return;
-
-            auto& session = sessions[sid];
-            auto& o = session.output;
-            string func, handler;
-            i >> handler >> func;
-            handlers()[handler]->onRequest(sid, func, i, *o, send);
-        }
-        void initHandlers()
-        {
-            for ( auto i : handlers() )
-                i.second->init();
-        }
-        template<typename... A>
-        static void pushMsg(SessionID sid, string event, A... a)
-        {
-            auto& s = *get();
-            if ( s.sessions.find(sid) == s.sessions.end() )return;
-
-            auto& o = *s.sessions[sid].output;
-            o << TPRC_DELIMITER(PUSH_REQUEST_ID) << TPRC_DELIMITER(event);
-            auto t = { ( o << a, 1 )... };
-            if ( s.send ) s.send(sid);
-        }
-        static RpcServer*& get()
-        {
-            static RpcServer* s;
-            return s;
-        }
-        static auto& handlers()
-        {
-            static map<string, Handler*> s;
-            return s;
-        }
-    private:
-        struct Session
-        {
-            SessionID sid;
-            ostream* output;
-        };
-        map<SessionID, Session> sessions;
-    };
+	template<typename... A>
+	using Resp = function<void(A...)>;
 
 
-    template<typename istream, typename ostream = istream>
-    class RpcClient
-    {
-    public:
-        function<void()> send;
+	template<typename istream, typename ostream = istream>
+	class Handler
+	{
+	public:
+		using Func = function<void(SessionID, istream&, ostream&, Signal)>;
 
-        RpcClient(ostream& o) :output(o)
-        {}
-        template<typename... A>
-        void call(string name, A... a)
-        {
-            using namespace imp;
-            using AllArgs = tuple<A...>;
-            constexpr int argCnt = sizeof...(A)-1;
-            using Args = tuple_elems<make_index_sequence<argCnt>, AllArgs>::type;
-            using CB = tuple_element_t<argCnt, AllArgs>;
-            using CBArgs = typename FuncTrait<CB>::Args;
+		virtual void init()
+		{}
+		void onRequest(SessionID sid, string name, istream& data, ostream& o, Signal done)
+		{
+			funcs[name](sid, data, o, done);
+		}
+		template<typename C, typename R, typename... A>
+		void addFunction(string name, R(C::*mf)(A...))
+		{
+			addFunction(name, [this, mf](A... a) {
+				return (static_cast<C*>(this)->*mf)(a...);
+			});
+		}
+		template<typename Func>
+		void addFunction(string name, Func f)
+		{
+			using namespace imp;
+			using AllArgs = typename FuncTrait<Func>::Args;
+			constexpr int argCnt = tuple_size<AllArgs>::value;
+			using Args = tuple_elems<make_index_sequence<argCnt - 1>, AllArgs>::type;
+			using CB = tuple_element_t<argCnt - 1, AllArgs>;
+			using CBArgs = typename FuncTrait<CB>::Args;
 
-            auto dot = name.find_first_of('.');
-            auto handler = name.substr(0, dot);
-            auto func = name.substr(dot + 1);
-            auto req = nextRequestID++;
-            output << TPRC_DELIMITER(handler) << TPRC_DELIMITER(func) << TPRC_DELIMITER(req);
-
-            auto args = make_tuple(a...);
-            auto cb = get<argCnt>(args);
-            requests[req] = [=](istream& i) {
-                CBArgs args;
-                auto idx = make_index_sequence<tuple_size<CBArgs>::value>();
-                readTuple<0>(i, args, idx);
-                invoke(cb, idx, args);
-            };
-            writeTuple(output, args, make_index_sequence<argCnt>());
-            if ( send ) send();
-        }
-        void onReceive(istream& i)
-        {
-            int requestID;
-            i >> requestID;
-            if ( requestID == PUSH_REQUEST_ID ) {
-                string name;
-                i >> name;
-                pushHandlers[name](i);
-            }
-            else {
-                requests[requestID](i);
-            }
-            requests.erase(requestID);
-        }
-
-        template<typename Func>
-        void onEvent(string name, Func f)
-        {
-            pushHandlers[name] = [=](istream& input) {
-                using namespace imp;
-                using Args = typename FuncTrait<Func>::Args;
-                Args args;
-                auto idx = make_index_sequence<tuple_size<Args>::value>();
-                readTuple<0>(input, args, idx);
-                invoke(f, idx, args);
-            };
-        }
-
-    private:
-        using Func = function<void(istream& i)>;
-        map<int, Func> requests;
-        map<string, function<void(istream&)>> pushHandlers;
-        int nextRequestID = NORMAL_REUQEST_ID;
-        ostream& output;
-    };
+			funcs[name] = [=](SessionID sid, istream& i, ostream& o, Signal done) {
+				int reqID;
+				i >> reqID;
+				Args args;
+				get<0>(args) = sid;
+				constexpr int argCnt = tuple_size<AllArgs>::value;
+				readTuple<1>(i, args, make_index_sequence<argCnt - 2>());
+				CB cb = genTupleSerializer(CBArgs(), reqID, o, done, sid);
+				auto args2 = tuple_cat(args, tie(cb));
+				invoke(f, make_index_sequence<argCnt>(), args2);
+			};
+		}
+	private:
+		map<string, Func> funcs;
+	};
 
 
-    template<typename T, typename istream, typename ostream = istream>
-    class RpcHandler : public Handler<istream, ostream>
-    {
-    public:
-        using Sub = T;
-        using RpcServer = RpcServer<istream, ostream>;
-        RpcHandler(string name)
-        {
-            RpcServer::addHandler(name, &instance);
-        }
-        static T& get()
-        {
-            return instance;
-        }
-    private:
-        static T instance;
-    };
 
-    template<typename T, typename istream, typename ostream>
-    T RpcHandler<T, istream, ostream>::instance;
+
+	const int PUSH_REQUEST_ID = 1;
+	const int NORMAL_REUQEST_ID = 2;
+
+	template<typename istream, typename ostream = istream>
+	class RpcServer
+	{
+	public:
+		using Handler = Handler<istream, ostream>;
+
+		Signal send;
+		Signal disconnected;
+
+		RpcServer()
+		{
+			get() = this;
+		}
+		static void addHandler(string n, Handler* h)
+		{
+			handlers()[n] = h;
+		}
+		void addSession(SessionID sid, ostream& o)
+		{
+			sessions[sid] = { sid, &o };
+		}
+		void removeSession(SessionID sid)
+		{
+			if (disconnected) disconnected(sid);
+			sessions.erase(sid);
+		}
+		void onReceive(SessionID sid, istream& i)
+		{
+			if (sessions.find(sid) == sessions.end())return;
+
+			auto& session = sessions[sid];
+			auto& o = session.output;
+			string func, handler;
+			i >> handler >> func;
+			handlers()[handler]->onRequest(sid, func, i, *o, send);
+		}
+		void initHandlers()
+		{
+			for (auto i : handlers())
+				i.second->init();
+		}
+		template<typename... A>
+		static void pushMsg(SessionID sid, string event, A... a)
+		{
+			auto& s = *get();
+			if (s.sessions.find(sid) == s.sessions.end())return;
+
+			auto& o = *s.sessions[sid].output;
+			o << TPRC_DELIMITER(PUSH_REQUEST_ID) << TPRC_DELIMITER(event);
+			auto t = { (o << a, 1)... };
+			if (s.send) s.send(sid);
+		}
+		static RpcServer*& get()
+		{
+			static RpcServer* s;
+			return s;
+		}
+		static auto& handlers()
+		{
+			static map<string, Handler*> s;
+			return s;
+		}
+	private:
+		struct Session
+		{
+			SessionID sid;
+			ostream* output;
+		};
+		map<SessionID, Session> sessions;
+	};
+
+
+
+	template<typename istream, typename ostream = istream>
+	class RpcClient
+	{
+	public:
+		function<void()> send;
+
+		RpcClient(ostream& o) :output(o)
+		{}
+
+		template<typename... A>
+		void call(string name, A... a)
+		{
+			using namespace imp;
+			using AllArgs = tuple<A...>;
+			constexpr int argCnt = sizeof...(A)-1;
+			using Args = tuple_elems<make_index_sequence<argCnt>, AllArgs>::type;
+			using CB = tuple_element_t<argCnt, AllArgs>;
+			using CBArgs = typename FuncTrait<CB>::Args;
+
+			auto dot = name.find_first_of('.');
+			auto handler = name.substr(0, dot);
+			auto func = name.substr(dot + 1);
+			auto req = nextRequestID++;
+			output << TPRC_DELIMITER(handler) << TPRC_DELIMITER(func) << TPRC_DELIMITER(req);
+
+			auto args = make_tuple(a...);
+			auto cb = get<argCnt>(args);
+			requests[req] = [=](istream& i) {
+				CBArgs args;
+				auto idx = make_index_sequence<tuple_size<CBArgs>::value>();
+				readTuple<0>(i, args, idx);
+				invoke(cb, idx, args);
+			};
+			writeTuple(output, args, make_index_sequence<argCnt>());
+			if (send) send();
+		}
+
+		void onReceive(istream& i)
+		{
+			int requestID;
+			i >> requestID;
+			if (requestID == PUSH_REQUEST_ID) {
+				string name;
+				i >> name;
+				pushHandlers[name](i);
+			}
+			else {
+				requests[requestID](i);
+			}
+			requests.erase(requestID);
+		}
+
+		template<typename Func>
+		void onEvent(string name, Func f)
+		{
+			pushHandlers[name] = [=](istream& input) {
+				using namespace imp;
+				using Args = typename FuncTrait<Func>::Args;
+				Args args;
+				auto idx = make_index_sequence<tuple_size<Args>::value>();
+				readTuple<0>(input, args, idx);
+				invoke(f, idx, args);
+			};
+		}
+
+	private:
+		using Func = function<void(istream& i)>;
+		map<int, Func> requests;
+		map<string, function<void(istream&)>> pushHandlers;
+		int nextRequestID = NORMAL_REUQEST_ID;
+		ostream& output;
+	};
+
+	//-----------------------------------------------------------------
+
+	template<typename T, typename istream, typename ostream = istream>
+	class RpcHandler : public Handler<istream, ostream>
+	{
+	public:
+		using Sub = T;
+		using RpcServer = RpcServer<istream, ostream>;
+		RpcHandler(string name)
+		{
+			RpcServer::addHandler(name, &instance);
+		}
+		static T& get()
+		{
+			return instance;
+		}
+		struct Reg
+		{
+			template<typename T>
+			Reg(Handler* h, string n, T t)
+			{
+				h->addFunction(n, t);
+			}
+		};
+	private:
+		static T instance;
+	};
+
+	template<typename T, typename istream, typename ostream>
+	T RpcHandler<T, istream, ostream>::instance;
 
 #define TRPC(name) Reg __##name{this, #name, &Sub::name};
 }
