@@ -3,7 +3,7 @@
 // by soniced@sina.com
 //
 #pragma once
-#include <QtNetwork>
+#include <QtNetwork/QtNetwork>
 #include "trpc.h"
 
 //inline QDataStream& operator<<(QDataStream& s, QVariant& v)
@@ -50,7 +50,7 @@ namespace trpc
 
     class QtRpcClient : public QObject, public RpcClient<QDataStream>
     {
-        Q_OBJECT
+        //Q_OBJECT
     public:
         QtRpcClient(QObject* parent): RpcClient(output){}
         void connectServer(string ip, int port, function<void()> connected);
@@ -64,7 +64,7 @@ namespace trpc
 
     class QtRpcServer : public QObject, public RpcServer<QDataStream>
     {
-        Q_OBJECT
+        //Q_OBJECT
     public:
         using QObject::QObject;
         void startListen(int port);
@@ -108,7 +108,7 @@ namespace trpc
     class QtRpcHandler : public RpcHandler<T, QDataStream>
     {
     public:
-        using RpcHandler::RpcHandler;
+        using RpcHandler<T,QDataStream>::RpcHandler;
     };
 
 }

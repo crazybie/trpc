@@ -105,7 +105,7 @@ namespace trpc
 			using namespace imp;
 			using AllArgs = typename FuncTrait<Func>::Args;
 			constexpr int argCnt = tuple_size<AllArgs>::value;
-			using Args = tuple_elems<make_index_sequence<argCnt - 1>, AllArgs>::type;
+			using Args = typename tuple_elems<make_index_sequence<argCnt - 1>, AllArgs>::type;
 			using CB = tuple_element_t<argCnt - 1, AllArgs>;
 			using CBArgs = typename FuncTrait<CB>::Args;
 
@@ -219,7 +219,7 @@ namespace trpc
 			using namespace imp;
 			using AllArgs = tuple<A...>;
 			constexpr int argCnt = sizeof...(A)-1;
-			using Args = tuple_elems<make_index_sequence<argCnt>, AllArgs>::type;
+			using Args = typename tuple_elems<make_index_sequence<argCnt>, AllArgs>::type;
 			using CB = tuple_element_t<argCnt, AllArgs>;
 			using CBArgs = typename FuncTrait<CB>::Args;
 
@@ -295,10 +295,10 @@ namespace trpc
 		}
 		struct Reg
 		{
-			template<typename T>
-			Reg(Handler* h, string n, T t)
+			template<typename U>
+			Reg(Handler<istream,ostream>* h, string n, U u)
 			{
-				h->addFunction(n, t);
+				h->addFunction(n, u);
 			}
 		};
 	private:
