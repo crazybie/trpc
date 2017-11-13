@@ -4,15 +4,14 @@
 //
 #pragma once
 #include <string>
-#include <cassert>
 #include <vector>
 #include <map>
 #include <functional>
 #include <tuple>
 
+//#define TPRC_DELEMER(n)  n << ' '
 #ifndef TPRC_DELIMITER
 #define TPRC_DELIMITER(n)  n
-//#define TPRC_DELEMER(n)  n << ' '
 #endif
 
 namespace trpc
@@ -213,6 +212,7 @@ namespace trpc
 		RpcClient(ostream& o) :output(o)
 		{}
 
+        // call('Auth.Login', loginName, password, [](<ArgsFromServer...>){ });
 		template<typename... A>
 		void call(string name, A... a)
 		{

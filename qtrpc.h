@@ -28,9 +28,10 @@ namespace trpc
     class QtRpcClient : public QObject, public RpcClient<QDataStream>
     {
     public:
-        QtRpcClient(QObject* parent): RpcClient(output){}
-        void connectServer(string ip, int port, function<void()> connected);
+        QtRpcClient(QObject* parent=nullptr): QObject(parent), RpcClient(output){}
+        void connectServer(QString ip, int port, function<void()> connected);
     private:
+        bool isConnected = false;
         int packageSize = 0;
         QTcpSocket* clientSocket;
         QByteArray  block;
@@ -42,7 +43,7 @@ namespace trpc
     {
     public:
         using QObject::QObject;
-        void startListen(int port);
+        bool startListen(QHostAddress addr, int port);
         ~QtRpcServer()
         {
             destoryed = true;

@@ -4,11 +4,15 @@
 namespace trpc
 {
 
-    void QtRpcClient::connectServer(string ip, int port, function<void()> connected)
+    void QtRpcClient::connectServer(QString ip, int port, function<void()> cb)
     {
         clientSocket = new QTcpSocket(this);
 
-        connect(clientSocket, &QTcpSocket::connected, connected);
+        connect(clientSocket, &QTcpSocket::connected, [this,cb] {
+            isConnected = true;
+            output.device()->reset();
+            cb();
+        });
 
         connect(clientSocket, &QTcpSocket::readyRead, [this] {
             QDataStream input{ clientSocket };
@@ -38,10 +42,10 @@ namespace trpc
             output.device()->reset();
         };
 
-        clientSocket->connectToHost(ip.c_str(), port);
+        clientSocket->connectToHost(ip, port);
     }
 
-    void QtRpcServer::startListen(int port)
+    bool QtRpcServer::startListen(QHostAddress addr, int port)
     {
         serverSocket = new QTcpServer(this);
 
@@ -91,7 +95,7 @@ namespace trpc
         };
 
         initHandlers();
-        serverSocket->listen(QHostAddress::Any, port);
+        return serverSocket->listen(addr, port);
     }
 
 }
