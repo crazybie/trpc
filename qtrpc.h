@@ -6,29 +6,6 @@
 #include <QtNetwork/QtNetwork>
 #include "trpc.h"
 
-//inline QDataStream& operator<<(QDataStream& s, QVariant& v)
-//{
-//    s << (int)v.type();
-//    switch ( v.type() ) {
-//    case QVariant::Int: s << v.toInt(); break;
-//    case QVariant::Double: s << v.toFloat(); break;
-//    case QVariant::String: s << v.toString(); break;
-//    case QVariant::Bool: s << v.toBool(); break;
-//    }
-//    return s;
-//}
-//inline QDataStream& operator >> (QDataStream& s, QVariant& v)
-//{
-//    int type;
-//    s >> type;
-//    switch ( type ) {
-//    case QVariant::Int: { int i; s >> i; v.setValue(i); break; }
-//    case QVariant::Double: { double i; s >> i; v.setValue(i); break; }
-//    case QVariant::String: { QString i; s >> i; v.setValue(i); break; }
-//    case QVariant::Bool: { bool i; s >> i; v.setValue(i); break; }
-//    }
-//    return s;
-//}
 
 namespace trpc
 {
@@ -50,7 +27,6 @@ namespace trpc
 
     class QtRpcClient : public QObject, public RpcClient<QDataStream>
     {
-        //Q_OBJECT
     public:
         QtRpcClient(QObject* parent): RpcClient(output){}
         void connectServer(string ip, int port, function<void()> connected);
@@ -64,7 +40,6 @@ namespace trpc
 
     class QtRpcServer : public QObject, public RpcServer<QDataStream>
     {
-        //Q_OBJECT
     public:
         using QObject::QObject;
         void startListen(int port);
@@ -80,9 +55,6 @@ namespace trpc
         {
             return sessions;
         }
-    private:
-        QTcpServer* serverSocket;
-        bool destoryed = false;
 
         struct Session
         {
@@ -98,6 +70,10 @@ namespace trpc
                 return data[k];
             }
         };
+
+    private:
+        QTcpServer* serverSocket;
+        bool destoryed = false;        
         map<int, Session> sessions;
         int sessionID = 100;
     };
