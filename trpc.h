@@ -8,6 +8,7 @@
 #include <map>
 #include <functional>
 #include <tuple>
+#include <assert.h>
 
 //#define TPRC_DELEMER(n)  n << ' '
 #ifndef TPRC_DELIMITER
@@ -78,12 +79,20 @@ namespace trpc
 	template<typename... A>
 	using Resp = function<void(A...)>;
 
+    template<typename istream, typename ostream>
+    class RpcServer;
 
 	template<typename istream, typename ostream = istream>
 	class Handler
 	{
 	public:
 		using Func = function<void(SessionID, istream&, ostream&, Signal)>;
+        using Server = RpcServer<istream, ostream>;
+        
+        string name;
+        
+        Handler(string n):name(n){}
+        virtual ~Handler(){}
 
 		virtual void init()
 		{}
@@ -120,6 +129,10 @@ namespace trpc
 				invoke(f, make_index_sequence<argCnt>(), args2);
 			};
 		}
+        void setServer(Server* s) { server = s; }
+
+    protected:
+        Server* server;
 	private:
 		map<string, Func> funcs;
 	};
@@ -139,13 +152,14 @@ namespace trpc
 		Signal send;
 		Signal disconnected;
 
-		RpcServer()
+        ~RpcServer() {
+            for (auto i : handlers) {
+                delete i.second;
+            }
+        }
+		void addHandler(Handler* h)
 		{
-			get() = this;
-		}
-		static void addHandler(string n, Handler* h)
-		{
-			handlers()[n] = h;
+			handlers[h->name] = h;
 		}
 		void addSession(SessionID sid, ostream& o)
 		{
@@ -161,37 +175,29 @@ namespace trpc
 			if (sessions.find(sid) == sessions.end())return;
 
 			auto& session = sessions[sid];
-			auto& o = session.output;
+			auto& o = *session.output;
 			string func, handler;
 			i >> handler >> func;
-			handlers()[handler]->onRequest(sid, func, i, *o, send);
+			handlers[handler]->onRequest(sid, func, i, o, send);
 		}
 		void initHandlers()
 		{
-			for (auto i : handlers())
-				i.second->init();
+            for (auto i : handlers) {
+                i.second->setServer(this);
+                i.second->init();
+            }				
 		}
 		template<typename... A>
-		static void pushMsg(SessionID sid, string event, A... a)
+		void pushMsg(SessionID sid, string event, A... a)
 		{
-			auto& s = *get();
-			if (s.sessions.find(sid) == s.sessions.end())return;
+			if (sessions.find(sid) == sessions.end())return;
 
-			auto& o = *s.sessions[sid].output;
+			auto& o = *sessions[sid].output;
 			o << TPRC_DELIMITER(PUSH_REQUEST_ID) << TPRC_DELIMITER(event);
 			auto t = { (o << a, 1)... };
-			if (s.send) s.send(sid);
+			if (send) send(sid);
 		}
-		static RpcServer*& get()
-		{
-			static RpcServer* s;
-			return s;
-		}
-		static auto& handlers()
-		{
-			static map<string, Handler*> s;
-			return s;
-		}
+
 	private:
 		struct Session
 		{
@@ -199,6 +205,7 @@ namespace trpc
 			ostream* output;
 		};
 		map<SessionID, Session> sessions;
+        map<string, Handler*> handlers;
 	};
 
 
@@ -285,28 +292,18 @@ namespace trpc
 	public:
 		using Sub = T;
 		using RpcServer = RpcServer<istream, ostream>;
-		RpcHandler(string name)
-		{
-			RpcServer::addHandler(name, &instance);
-		}
-		static T& get()
-		{
-			return instance;
-		}
-		struct Reg
-		{
-			template<typename U>
-			Reg(Handler<istream,ostream>* h, string n, U u)
-			{
-				h->addFunction(n, u);
-			}
-		};
-	private:
-		static T instance;
+        
+        RpcHandler(string name): Handler(name){}
+        
+        struct Reg
+        {
+            template<typename U>
+            Reg(Handler<istream, ostream>* h, string n, U u)
+            {
+                h->addFunction(n, u);
+            }
+        };
 	};
-
-	template<typename T, typename istream, typename ostream>
-	T RpcHandler<T, istream, ostream>::instance;
 
 #define TRPC(name) Reg __##name{this, #name, &Sub::name};
 }

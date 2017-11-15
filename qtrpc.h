@@ -48,15 +48,10 @@ namespace trpc
         {
             destoryed = true;
         }
-        static QtRpcServer* get()
+        auto& getSession(int sid)
         {
-            return (QtRpcServer*)RpcServer::get();
+            return sessions[sid];
         }
-        auto& getSessions()
-        {
-            return sessions;
-        }
-
         struct Session
         {
             int sid = 0;
@@ -66,10 +61,7 @@ namespace trpc
             int packageSize = 0;
             map<string, QVariant> data;
 
-            QVariant& operator[](string k)
-            {
-                return data[k];
-            }
+            QVariant& operator[](string k) { return data[k]; }
         };
 
     private:
@@ -79,13 +71,22 @@ namespace trpc
         int sessionID = 100;
     };
 
-    inline auto& getSession(SessionID sid) { return QtRpcServer::get()->getSessions()[sid]; }
+    
 
     template<typename T>
     class QtRpcHandler : public RpcHandler<T, QDataStream>
     {
     public:
         using RpcHandler<T,QDataStream>::RpcHandler;
+
+        QtRpcHandler(string name): RpcHandler(name){}
+
+        QtRpcServer* getServer() {
+            return static_cast<QtRpcServer*>(server);
+        }
+        auto& getSession(SessionID sid) { 
+            return getServer()->getSession(sid); 
+        }
     };
 
 }
