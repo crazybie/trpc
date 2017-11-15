@@ -4,14 +4,20 @@
 namespace trpc
 {
 
-    void QtRpcClient::connectServer(QString ip, int port, function<void()> cb)
+    void QtRpcClient::connectServer(QString ip, int port, SocketCb cb)
     {
         clientSocket = new QTcpSocket(this);
+        mIsConnected = false;
 
         connect(clientSocket, &QTcpSocket::connected, [this,cb] {
-            isConnected = true;
+            mIsConnected = true;
             output.device()->reset();
-            cb();
+            cb(true, QTcpSocket::UnknownSocketError);
+        });
+
+        connect(clientSocket, QOverload<QAbstractSocket::SocketError>::of(&QAbstractSocket::error), [this, cb](QAbstractSocket::SocketError err) {
+            socketError = err;
+            cb(false, err);
         });
 
         connect(clientSocket, &QTcpSocket::readyRead, [this] {
@@ -45,9 +51,13 @@ namespace trpc
         clientSocket->connectToHost(ip, port);
     }
 
-    bool QtRpcServer::startListen(QHostAddress addr, int port)
+    void QtRpcServer::startListen(QHostAddress addr, int port, SocketCb cb)
     {
         serverSocket = new QTcpServer(this);
+
+        connect(serverSocket, &QTcpServer::acceptError, [this, cb](QAbstractSocket::SocketError err) {
+            cb(false, err);
+        });
 
         connect(serverSocket, &QTcpServer::newConnection, [this] {
 
@@ -95,8 +105,12 @@ namespace trpc
         };
 
         initHandlers();
-        return serverSocket->listen(addr, port);
-    }
 
+        if (!serverSocket->listen(addr, port)) {
+            return cb(false, serverSocket->serverError());
+        }
+
+        cb(true, QTcpSocket::UnknownSocketError);
+    }
 }
 

@@ -23,15 +23,20 @@ namespace trpc
         return s << v.c_str();
     }
 
-
+    using SocketCb = std::function<void(bool, QAbstractSocket::SocketError)>;
 
     class QtRpcClient : public QObject, public RpcClient<QDataStream>
     {
     public:
         QtRpcClient(QObject* parent=nullptr): QObject(parent), RpcClient(output){}
-        void connectServer(QString ip, int port, function<void()> connected);
+        void connectServer(QString ip, int port, SocketCb cb);
+        bool isConnected() {
+            return mIsConnected;
+        }
+        QAbstractSocket::SocketError getSocketError() { return socketError; }
     private:
-        bool isConnected = false;
+        bool mIsConnected = false;
+        QAbstractSocket::SocketError socketError;
         int packageSize = 0;
         QTcpSocket* clientSocket;
         QByteArray  block;
@@ -43,7 +48,7 @@ namespace trpc
     {
     public:
         using QObject::QObject;
-        bool startListen(QHostAddress addr, int port);
+        void startListen(QHostAddress addr, int port, SocketCb cb);
         ~QtRpcServer()
         {
             destoryed = true;

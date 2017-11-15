@@ -60,6 +60,14 @@ namespace trpc
 			using Args = tuple<A...>;
 		};
 
+        template<typename Tuple>
+        struct ArgsTrait {
+            static const int AllArgCnt = tuple_size<Tuple>::value;
+            using Args = typename tuple_elems<make_index_sequence<AllArgCnt - 1>, Tuple>::type;
+            using CB = tuple_element_t<AllArgCnt - 1, Tuple>;
+            using CBArgs = typename FuncTrait<CB>::Args;            
+        };
+
 		template<typename ostream, typename CB, typename CBArg, typename...A>
 		auto genTupleSerializer(tuple<A...>, int tag, ostream& o, CB& cb, CBArg cbArg)
 		{
@@ -102,22 +110,17 @@ namespace trpc
 		void addFunction(string name, Func f)
 		{
 			using namespace imp;
-			using AllArgs = typename FuncTrait<Func>::Args;
-			constexpr int argCnt = tuple_size<AllArgs>::value;
-			using Args = typename tuple_elems<make_index_sequence<argCnt - 1>, AllArgs>::type;
-			using CB = tuple_element_t<argCnt - 1, AllArgs>;
-			using CBArgs = typename FuncTrait<CB>::Args;
+			using F = ArgsTrait<typename FuncTrait<Func>::Args>;
 
 			funcs[name] = [=](SessionID sid, istream& i, ostream& o, Signal done) {
 				int reqID;
 				i >> reqID;
-				Args args;
+				F::Args args;
 				get<0>(args) = sid;
-				constexpr int argCnt = tuple_size<AllArgs>::value;
-				readTuple<1>(i, args, make_index_sequence<argCnt - 2>());
-				CB cb = genTupleSerializer(CBArgs(), reqID, o, done, sid);
+				readTuple<1>(i, args, make_index_sequence<F::AllArgCnt - 2>());
+				F::CB cb = genTupleSerializer(F::CBArgs(), reqID, o, done, sid);
 				auto args2 = tuple_cat(args, tie(cb));
-				invoke(f, make_index_sequence<argCnt>(), args2);
+				invoke(f, make_index_sequence<F::AllArgCnt>(), args2);
 			};
 		}
 	private:
@@ -217,11 +220,7 @@ namespace trpc
 		void call(string name, A... a)
 		{
 			using namespace imp;
-			using AllArgs = tuple<A...>;
-			constexpr int argCnt = sizeof...(A)-1;
-			using Args = typename tuple_elems<make_index_sequence<argCnt>, AllArgs>::type;
-			using CB = tuple_element_t<argCnt, AllArgs>;
-			using CBArgs = typename FuncTrait<CB>::Args;
+			using F = ArgsTrait<tuple<A...>>;
 
 			auto dot = name.find_first_of('.');
 			auto handler = name.substr(0, dot);
@@ -230,14 +229,14 @@ namespace trpc
 			output << TPRC_DELIMITER(handler) << TPRC_DELIMITER(func) << TPRC_DELIMITER(req);
 
 			auto args = make_tuple(a...);
-			auto cb = get<argCnt>(args);
+			auto cb = get<F::AllArgCnt-1>(args);
 			requests[req] = [=](istream& i) {
-				CBArgs args;
-				auto idx = make_index_sequence<tuple_size<CBArgs>::value>();
+				F::CBArgs args;
+				auto idx = make_index_sequence<tuple_size<F::CBArgs>::value>();
 				readTuple<0>(i, args, idx);
 				invoke(cb, idx, args);
 			};
-			writeTuple(output, args, make_index_sequence<argCnt>());
+			writeTuple(output, args, make_index_sequence<F::AllArgCnt-1>());
 			if (send) send();
 		}
 
