@@ -32,11 +32,12 @@ namespace trpc
         void connectServer(QString ip, int port, SocketCb cb);
         bool isConnected() { return mIsConnected; }
         QAbstractSocket::SocketError getSocketError() { return socketError; }
+        void close();
     private:
         bool mIsConnected = false;
         QAbstractSocket::SocketError socketError;
         int packageSize = 0;
-        QTcpSocket* clientSocket;
+        QTcpSocket* socket;
         QByteArray  block;
         QDataStream output{ &block, QIODevice::WriteOnly };        
     };
@@ -62,7 +63,7 @@ namespace trpc
         ~QtRpcServer() { destoryed = true; }
         Session& getSession(int sid) { return sessions[sid]; }
     private:
-        QTcpServer* serverSocket;
+        QTcpServer* socket;
         bool destoryed = false;        
         map<int, Session> sessions;
         int sessionID = 100;

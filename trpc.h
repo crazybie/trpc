@@ -219,6 +219,7 @@ namespace trpc
 	{
 	public:
 		function<void()> send;
+        function<bool(void*)> beforeResp;
 
 		RpcClient(ostream& o) :output(o)
 		{}
@@ -242,7 +243,10 @@ namespace trpc
 				F::CBArgs args;
 				auto idx = make_index_sequence<tuple_size<F::CBArgs>::value>();
 				readTuple<0>(i, args, idx);
-				invoke(cb, idx, args);
+                
+                bool callUser = true;
+                if (beforeResp) callUser = beforeResp(&args);
+				if (callUser) invoke(cb, idx, args);
 			};
 			writeTuple(output, args, make_index_sequence<F::AllArgCnt-1>());
 			if (send) send();
