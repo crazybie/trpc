@@ -30,9 +30,7 @@ namespace trpc
     public:
         QtRpcClient(QObject* parent=nullptr): QObject(parent), RpcClient(output){}
         void connectServer(QString ip, int port, SocketCb cb);
-        bool isConnected() {
-            return mIsConnected;
-        }
+        bool isConnected() { return mIsConnected; }
         QAbstractSocket::SocketError getSocketError() { return socketError; }
     private:
         bool mIsConnected = false;
@@ -48,15 +46,6 @@ namespace trpc
     {
     public:
         using QObject::QObject;
-        void startListen(QHostAddress addr, int port, SocketCb cb);
-        ~QtRpcServer()
-        {
-            destoryed = true;
-        }
-        auto& getSession(int sid)
-        {
-            return sessions[sid];
-        }
         struct Session
         {
             int sid = 0;
@@ -69,6 +58,9 @@ namespace trpc
             QVariant& operator[](string k) { return data[k]; }
         };
 
+        void startListen(QHostAddress addr, int port, SocketCb cb);
+        ~QtRpcServer() { destoryed = true; }
+        Session& getSession(int sid) { return sessions[sid]; }
     private:
         QTcpServer* serverSocket;
         bool destoryed = false;        
@@ -83,15 +75,12 @@ namespace trpc
     {
     public:
         using RpcHandler<T,QDataStream>::RpcHandler;
+        using Session = QtRpcServer::Session;
 
         QtRpcHandler(string name): RpcHandler(name){}
 
-        QtRpcServer* getServer() {
-            return static_cast<QtRpcServer*>(server);
-        }
-        auto& getSession(SessionID sid) { 
-            return getServer()->getSession(sid); 
-        }
+        QtRpcServer* getServer() { return static_cast<QtRpcServer*>(server); }
+        Session& getSession(SessionID sid) {  return getServer()->getSession(sid);  }
     };
 
 }

@@ -62,7 +62,8 @@ namespace trpc
 		};
 
         template<typename Tuple>
-        struct ArgsTrait {
+        struct ArgsTrait
+        {
             static const int AllArgCnt = tuple_size<Tuple>::value;
             using Args = typename tuple_elems<make_index_sequence<AllArgCnt - 1>, Tuple>::type;
             using CB = tuple_element_t<AllArgCnt - 1, Tuple>;
