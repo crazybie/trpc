@@ -6,6 +6,8 @@ namespace trpc
 
     void QtRpcClient::connectServer(QString ip, int port, SocketCb cb)
     {
+        close();
+
         socket = new QTcpSocket(this);
         mIsConnected = false;
 
@@ -53,8 +55,11 @@ namespace trpc
 
     void QtRpcClient::close()
     {
-        socket->close();
-        delete socket;
+        if (socket) {
+            socket->close();
+            delete socket;
+            socket = nullptr;
+        }        
         mIsConnected = false;
     }
 
