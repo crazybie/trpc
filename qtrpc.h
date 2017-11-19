@@ -33,6 +33,7 @@ namespace trpc
         bool isConnected() { return mIsConnected; }
         QAbstractSocket::SocketError getSocketError() { return socketError; }
         void close();
+        QTcpSocket* getSocket() { return socket; }
     private:
         bool mIsConnected = false;
         QAbstractSocket::SocketError socketError;
