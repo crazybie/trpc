@@ -103,8 +103,9 @@ namespace trpc
         Handler(string n) :name(n) {}
         virtual ~Handler() {}
 
-        virtual void init()
-        {}
+        virtual void init(){}
+        virtual void onDisconnected(SessionID sid){}
+
         void onRequest(SessionID sid, string name, istream& data, ostream& o, Signal done)
         {
             funcs[name](sid, data, o, done);
@@ -171,6 +172,9 @@ namespace trpc
         }
         void removeSession(SessionID sid)
         {
+            for (auto i : handlers) {
+                i.second->onDisconnected(sid);
+            }
             if (disconnected) disconnected(sid);
             sessions.erase(sid);
         }

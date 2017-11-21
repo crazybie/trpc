@@ -48,6 +48,11 @@ namespace trpc
     {
     public:
         using QObject::QObject;
+        ~QtRpcServer() { destoryed = true; }
+        void startListen(QHostAddress addr, int port, SocketCb cb);        
+        QVariant& getSessionField(int sid, QString k) { return sessions[sid].data[k]; }
+        void setSessionField(int sid, QString k, QVariant v) { sessions[sid].data[k] = v; }
+    private:
         struct Session
         {
             int sid = 0;
@@ -55,15 +60,8 @@ namespace trpc
             QByteArray  block;
             QDataStream output{ &block, QIODevice::WriteOnly };
             int packageSize = 0;
-            map<string, QVariant> data;
-
-            QVariant& operator[](string k) { return data[k]; }
+            map<QString, QVariant> data;
         };
-
-        void startListen(QHostAddress addr, int port, SocketCb cb);
-        ~QtRpcServer() { destoryed = true; }
-        Session& getSession(int sid) { return sessions[sid]; }
-    private:
         QTcpServer* socket;
         bool destoryed = false;        
         map<int, Session> sessions;
@@ -77,12 +75,11 @@ namespace trpc
     {
     public:
         using RpcHandler<T,QDataStream>::RpcHandler;
-        using Session = QtRpcServer::Session;
 
         QtRpcHandler(string name): RpcHandler(name){}
-
         QtRpcServer* getServer() { return static_cast<QtRpcServer*>(server); }
-        Session& getSession(SessionID sid) {  return getServer()->getSession(sid);  }
+        QVariant& getSessionField(SessionID sid, QString f) {  return getServer()->getSessionField(sid, f);  }
+        void setSessionField(int sid, QString k, QVariant v) { getServer()->setSessionField(sid, k, v); }
     };
 
 }
