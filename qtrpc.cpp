@@ -29,7 +29,9 @@ namespace trpc
                     input >> packageSize;   // read block size.
                 }
                 if ( packageSize > 0 && socket->bytesAvailable() >= packageSize ) {
+                    auto total = socket->bytesAvailable();
                     onReceive(input);
+                    assert(total - socket->bytesAvailable() == packageSize && "read size not expected");
                     packageSize = 0;
                 }
                 else {
@@ -63,6 +65,15 @@ namespace trpc
         mIsConnected = false;
     }
 
+    QtRpcServer::~QtRpcServer()
+    {
+        destoryed = true;
+        if (socket) {
+            socket->close();
+            delete socket;
+        }
+    }
+
     void QtRpcServer::startListen(QHostAddress addr, int port, SocketCb cb)
     {
         socket = new QTcpServer(this);
@@ -85,7 +96,9 @@ namespace trpc
                         input >> session.packageSize;   // read block size.
                     }
                     if ( session.packageSize && session.client->bytesAvailable() >= session.packageSize ) {
+                        auto total = session.client->bytesAvailable();
                         onReceive(session.sid, input);
+                        assert(total - session.client->bytesAvailable() == session.packageSize && "read size not expected");
                         session.packageSize = 0;
                     }
                     else {

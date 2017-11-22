@@ -157,14 +157,16 @@ namespace trpc
         Signal send;
         Signal disconnected;
 
-        ~RpcServer() {
+        ~RpcServer() 
+        {
             for (auto i : handlers) {
                 delete i.second;
             }
         }
-        void addHandler(Handler* h)
+        void addHandlers(std::initializer_list<Handler*> h)
         {
-            handlers[h->name] = h;
+            for(auto i: h)
+                handlers[i->name] = i;
         }
         void addSession(SessionID sid, ostream& o)
         {
@@ -190,6 +192,7 @@ namespace trpc
         }
         void initHandlers()
         {
+            assert(handlers.size() && "must call addHandlers before listening.");
             for (auto i : handlers) {
                 i.second->setServer(this);
                 i.second->init();
@@ -249,7 +252,7 @@ namespace trpc
                 readTuple<0>(i, args, idx);
 
                 bool callUser = true;
-                if (beforeResp) callUser = beforeResp(handler, func, &args);
+                if (beforeResp) callUser = beforeResp(handler, func, &get<0>(args));
                 if (callUser) invoke(cb, idx, args);
             };
             writeTuple(output, args, make_index_sequence<F::AllArgCnt - 1>());
