@@ -186,7 +186,6 @@ namespace trpc
 
             auto& session = sessions[sid];
             auto& o = *session.output;
-            string func, handler;
             i >> handler >> func;
             handlers[handler]->onRequest(sid, func, i, o, send);
         }
@@ -217,6 +216,7 @@ namespace trpc
         };
         map<SessionID, Session> sessions;
         map<string, Handler*> handlers;
+        string func, handler; // 保存下来好调试
     };
 
 
