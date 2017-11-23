@@ -126,7 +126,7 @@ namespace trpc
             funcs[name] = [=](SessionID sid, istream& i, ostream& o, Signal done) {
                 int reqID;
                 i >> reqID;
-                F::Args args;
+                typename F::Args args;
                 get<0>(args) = sid;
                 readTuple<1>(i, args, make_index_sequence<F::AllArgCnt - 2>());
                 F::CB cb = genTupleSerializer(F::CBArgs(), reqID, o, done, sid);
@@ -247,8 +247,8 @@ namespace trpc
             auto args = make_tuple(a...);
             auto cb = get<F::AllArgCnt - 1>(args);
             requests[req] = [=](istream& i) {
-                F::CBArgs args;
-                auto idx = make_index_sequence<tuple_size<F::CBArgs>::value>();
+                typename F::CBArgs args;
+                auto idx = make_index_sequence<tuple_size<typename F::CBArgs>::value>();
                 readTuple<0>(i, args, idx);
 
                 bool callUser = true;
