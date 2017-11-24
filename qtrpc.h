@@ -34,6 +34,7 @@ namespace trpc
         QAbstractSocket::SocketError getSocketError() { return socketError; }
         void close();
         QTcpSocket* getSocket() { return socket; }
+        function<void(int)> onRead;
     private:
         bool mIsConnected = false;
         QAbstractSocket::SocketError socketError;
@@ -52,6 +53,7 @@ namespace trpc
         void startListen(QHostAddress addr, int port, SocketCb cb);        
         QVariant& getSessionField(int sid, QString k) { return sessions[sid].data[k]; }
         void setSessionField(int sid, QString k, QVariant v) { sessions[sid].data[k] = v; }
+        function<void(int)> onRead;
     private:
         struct Session
         {

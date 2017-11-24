@@ -31,8 +31,10 @@ namespace trpc
                 if ( packageSize > 0 && socket->bytesAvailable() >= packageSize ) {
                     auto total = socket->bytesAvailable();
                     onReceive(input);
-                    assert(total - socket->bytesAvailable() == packageSize && "read size not expected");
-                    packageSize = 0;
+                    auto readSz = total - socket->bytesAvailable();
+                    assert(readSz == packageSize && "read size not expected");
+                    if (onRead) onRead(packageSize);
+                    packageSize = 0;                    
                 }
                 else {
                     break;
@@ -99,6 +101,7 @@ namespace trpc
                         auto total = session.client->bytesAvailable();
                         onReceive(session.sid, input);
                         assert(total - session.client->bytesAvailable() == session.packageSize && "read size not expected");
+                        if (onRead) onRead(session.packageSize);
                         session.packageSize = 0;
                     }
                     else {
