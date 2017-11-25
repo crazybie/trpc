@@ -108,6 +108,7 @@ namespace trpc
 
         void onRequest(SessionID sid, string name, istream& data, ostream& o, Signal done)
         {
+            assert(funcs[name]);
             funcs[name](sid, data, o, done);
         }
         template<typename C, typename R, typename... A>
@@ -182,11 +183,12 @@ namespace trpc
         }
         void onReceive(SessionID sid, istream& i)
         {
-            if (sessions.find(sid) == sessions.end())return;
+            if (sessions.find(sid) == sessions.end()) return;
 
             auto& session = sessions[sid];
             auto& o = *session.output;
             i >> handler >> func;
+            assert(handlers[handler]);
             handlers[handler]->onRequest(sid, func, i, o, send);
         }
         void initHandlers()
