@@ -29,11 +29,9 @@ namespace trpc
                     input >> packageSize;   // read block size.
                 }
                 if ( packageSize > 0 && socket->bytesAvailable() >= packageSize ) {
-                    auto total = socket->bytesAvailable();
-                    onReceive(input);
-                    auto readSz = total - socket->bytesAvailable();
-                    assert(readSz <= packageSize && "read size not expected");
-                    socket->read(packageSize - readSz);
+                    auto package = input.device()->read(packageSize);
+                    onReceive(QDataStream(&package, QIODevice::ReadOnly));
+
                     if (onRead) onRead(packageSize);
                     packageSize = 0;                    
                 }
@@ -99,11 +97,9 @@ namespace trpc
                         input >> session.packageSize;   // read block size.
                     }
                     if ( session.packageSize && session.client->bytesAvailable() >= session.packageSize ) {
-                        auto total = session.client->bytesAvailable();
-                        onReceive(session.sid, input);
-                        auto readSz = total - session.client->bytesAvailable();
-                        assert(readSz <= session.packageSize && "read size not expected");
-                        session.client->read(session.packageSize - readSz);
+                        auto package = session.client->read(session.packageSize);
+                        onReceive(session.sid, QDataStream(&package, QIODevice::ReadOnly));
+                        
                         if (onRead) onRead(session.packageSize);
                         session.packageSize = 0;
                     }

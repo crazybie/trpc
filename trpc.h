@@ -75,7 +75,7 @@ namespace trpc
         {
             return [&, tag, cb, cbArg](A...a) {
                 o << TPRC_DELIMITER(tag);
-                auto i = { (o << TPRC_DELIMITER(a), 1)... };
+                std::initializer_list<int> i = { (o << TPRC_DELIMITER(a), 1)... };
                 (void)i;
                 if (cb) cb(cbArg);
             };
@@ -266,9 +266,8 @@ namespace trpc
             int requestID;
             i >> requestID;
             if (requestID == PUSH_REQUEST_ID) {
-                string name;
-                i >> name;
-                pushHandlers[name](i);
+                i >> pushHandlerName;
+                pushHandlers[pushHandlerName](i);
             }
             else {
                 requests[requestID](i);
@@ -295,6 +294,7 @@ namespace trpc
         map<string, function<void(istream&)>> pushHandlers;
         int nextRequestID = NORMAL_REUQEST_ID;
         ostream& output;
+        string pushHandlerName;
     };
 
     //-----------------------------------------------------------------
