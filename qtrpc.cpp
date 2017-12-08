@@ -22,6 +22,10 @@ namespace trpc
             cb(false, err);
         });
 
+        connect(socket, &QAbstractSocket::disconnected, [this] {
+            mIsConnected = false;
+        });
+
         connect(socket, &QTcpSocket::readyRead, [this] {
             QDataStream input{ socket };
             while ( true ) {
@@ -48,9 +52,12 @@ namespace trpc
             s << sz;
             socket->write(b);
             socket->write(block);
-            socket->flush();
+            socket->flush(); // 可能触发disconnect
             block.clear();
-            output.device()->reset();
+
+            if (mIsConnected) {                
+                output.device()->reset();
+            }            
         };
 
         socket->connectToHost(ip, port);
@@ -68,7 +75,6 @@ namespace trpc
 
     QtRpcServer::~QtRpcServer()
     {
-        destoryed = true;
         if (socket) {
             socket->close();
             delete socket;
@@ -92,6 +98,7 @@ namespace trpc
 
             connect(session.client, &QTcpSocket::readyRead, [this, &session] {
                 QDataStream input(session.client);
+                auto sid = session.sid;
                 while ( session.client->bytesAvailable() ) {
                     if ( !session.packageSize && session.client->bytesAvailable() >= sizeof(quint32) ) {
                         input >> session.packageSize;   // read block size.
@@ -102,6 +109,7 @@ namespace trpc
                         
                         if (onRead) onRead(session.packageSize);
                         session.packageSize = 0;
+                        if (sessions.find(sid) == sessions.end()) return;
                     }
                     else {
                         break;
@@ -109,8 +117,7 @@ namespace trpc
                 }
             });
 
-            connect(session.client, &QAbstractSocket::disconnected, [this, &session] {
-                if ( destoryed ) return;
+            connect(session.client, &QAbstractSocket::disconnected, [this, &session] {                
                 removeSession(session.sid);
                 sessions.erase(session.sid);
             });
@@ -126,7 +133,9 @@ namespace trpc
             s << sz;
             session.client->write(b);
             session.client->write(session.block);
-            session.client->flush();
+            session.client->flush(); // 可能触发disconnect 
+            if (sessions.find(sid) == sessions.end()) return;
+
             session.block.clear();
             session.output.device()->reset();
         };

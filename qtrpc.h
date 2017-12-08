@@ -65,7 +65,6 @@ namespace trpc
             map<QString, QVariant> data;
         };
         QTcpServer* socket = nullptr;
-        bool destoryed = false;        
         map<int, Session> sessions;
         int sessionID = 100;
     };
