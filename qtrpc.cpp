@@ -33,7 +33,7 @@ namespace trpc
                     input >> packageSize;   // read block size.
                 }
                 if ( packageSize > 0 && socket->bytesAvailable() >= packageSize ) {
-                    auto package = input.device()->read(packageSize);
+                    auto package = socket->read(packageSize);
                     onReceive(QDataStream(&package, QIODevice::ReadOnly));
 
                     if (onRead) onRead(packageSize);
