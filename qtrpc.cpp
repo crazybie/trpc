@@ -28,7 +28,7 @@ namespace trpc
 
         connect(socket, &QTcpSocket::readyRead, [this] {
             QDataStream input{ socket };
-            while ( true ) {
+            while (socket) {
                 if ( packageSize == 0 && socket->bytesAvailable() >= sizeof(packageSize) ) {
                     input >> packageSize;   // read block size.
                 }
