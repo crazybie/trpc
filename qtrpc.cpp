@@ -1,3 +1,7 @@
+//
+// by soniced@sina.com.
+// All rights reserved.
+//
 #include "qtrpc.h"
 
 

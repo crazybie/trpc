@@ -1,6 +1,8 @@
 //
 // tiny rpc framework
-// by soniced@sina.com
+//
+// by soniced@sina.com.
+// All rights reserved.
 //
 #pragma once
 #include <string>

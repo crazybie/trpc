@@ -1,6 +1,8 @@
 //
-// qt binding for trpc
-// by soniced@sina.com
+// qt binding for trpc.
+//
+// by soniced@sina.com.
+// All rights reserved.
 //
 #pragma once
 #include <QtNetwork/QtNetwork>
