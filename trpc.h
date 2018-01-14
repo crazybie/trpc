@@ -25,7 +25,7 @@ namespace trpc
     {
 
         template<typename F, size_t... idx, typename... A>
-        auto invoke(F f, index_sequence<idx...>, tuple<A...>& a)
+        auto invoke(F&& f, index_sequence<idx...>, tuple<A...>& a)
         {
             return f(get<idx>(a)...);
         }
@@ -59,6 +59,12 @@ namespace trpc
 
         template<typename R, typename C, typename... A>
         struct FuncTrait<R(C::*)(A...)const>
+        {
+            using Args = tuple<A...>;
+        };
+
+        template<typename R, typename C, typename... A>
+        struct FuncTrait<R(C::*)(A...)>
         {
             using Args = tuple<A...>;
         };
@@ -160,7 +166,7 @@ namespace trpc
         Signal send;
         Signal disconnected;
 
-        ~RpcServer() 
+        virtual ~RpcServer() 
         {
             for (auto i : handlers) {
                 delete i.second;
@@ -168,8 +174,12 @@ namespace trpc
         }
         void addHandlers(std::initializer_list<Handler*> h)
         {
-            for(auto i: h)
-                handlers[i->name] = i;
+            for (auto i : h)
+                addHandler(i);
+        }
+        void addHandler(Handler* h) 
+        {
+            handlers[h->name] = h;
         }
         void addSession(SessionID sid, ostream& o)
         {
@@ -234,6 +244,7 @@ namespace trpc
 
         RpcClient(ostream& o) :output(o)
         {}
+        virtual ~RpcClient(){}
 
         // call('Auth.Login', loginName, password, [](<ArgsFromServer...>){ });
         template<typename... A>

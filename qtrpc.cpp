@@ -12,25 +12,25 @@ namespace trpc
     {
         close();
 
-        socket = new QTcpSocket(this);
+        socket = new QTcpSocket();
         mIsConnected = false;
 
-        connect(socket, &QTcpSocket::connected, [this,cb] {
+        socket->connect(socket, &QTcpSocket::connected, [this,cb] {
             mIsConnected = true;
             output.device()->reset();
             cb(true, QTcpSocket::UnknownSocketError);
         });
 
-        connect(socket, QOverload<QAbstractSocket::SocketError>::of(&QAbstractSocket::error), [this, cb](QAbstractSocket::SocketError err) {
+        socket->connect(socket, QOverload<QAbstractSocket::SocketError>::of(&QAbstractSocket::error), [this, cb](QAbstractSocket::SocketError err) {
             socketError = err;
             cb(false, err);
         });
 
-        connect(socket, &QAbstractSocket::disconnected, [this] {
+        socket->connect(socket, &QAbstractSocket::disconnected, [this] {
             mIsConnected = false;
         });
 
-        connect(socket, &QTcpSocket::readyRead, [this] {
+        socket->connect(socket, &QTcpSocket::readyRead, [this] {
             QDataStream input{ socket };
             while (socket) {
                 if ( packageSize == 0 && socket->bytesAvailable() >= sizeof(packageSize) ) {
@@ -86,22 +86,22 @@ namespace trpc
         }
     }
 
-    void QtRpcServer::startListen(QHostAddress addr, int port, SocketCb cb)
-    {
-        socket = new QTcpServer(this);
+    void QtRpcServer::startListen(QString ip, int port, SocketCb cb)
+    {        
+        socket = new QTcpServer();
 
-        connect(socket, &QTcpServer::acceptError, [this, cb](QAbstractSocket::SocketError err) {
+        socket->connect(socket, &QTcpServer::acceptError, [this, cb](QAbstractSocket::SocketError err) {
             cb(false, err);
         });
 
-        connect(socket, &QTcpServer::newConnection, [this] {
+        socket->connect(socket, &QTcpServer::newConnection, [this] {
 
             auto& session = sessions[sessionID];
             session.sid = sessionID++;
             session.client = socket->nextPendingConnection();
             addSession(session.sid, session.output);
 
-            connect(session.client, &QTcpSocket::readyRead, [this, &session] {
+            socket->connect(session.client, &QTcpSocket::readyRead, [this, &session] {
                 QDataStream input(session.client);
                 auto sid = session.sid;
                 while ( session.client->bytesAvailable() ) {
@@ -123,7 +123,7 @@ namespace trpc
                 }
             });
 
-            connect(session.client, &QAbstractSocket::disconnected, [this, &session] {                
+            socket->connect(session.client, &QAbstractSocket::disconnected, [this, &session] {
                 removeSession(session.sid);
                 sessions.erase(session.sid);
             });
@@ -148,7 +148,7 @@ namespace trpc
 
         initHandlers();
 
-        if (!socket->listen(addr, port)) {
+        if (!socket->listen(QHostAddress(ip), port)) {
             return cb(false, socket->serverError());
         }
 

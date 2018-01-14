@@ -27,14 +27,15 @@ namespace trpc
 
     using SocketCb = std::function<void(bool, QAbstractSocket::SocketError)>;
 
-    class QtRpcClient : public QObject, public RpcClient<QDataStream>
+    class QtRpcClient :public RpcClient<QDataStream>
     {
     public:
-        QtRpcClient(QObject* parent=nullptr): QObject(parent), RpcClient(output){}
+        QtRpcClient():  RpcClient(output){}
         void connectServer(QString ip, int port, SocketCb cb);
         bool isConnected() { return mIsConnected; }
         QAbstractSocket::SocketError getSocketError() { return socketError; }
         void close();
+        ~QtRpcClient() { close(); }
         QTcpSocket* getSocket() { return socket; }
         function<void(int)> onRead;
     private:
@@ -47,12 +48,11 @@ namespace trpc
     };
 
 
-    class QtRpcServer : public QObject, public RpcServer<QDataStream>
+    class QtRpcServer : public RpcServer<QDataStream>
     {
     public:
-        using QObject::QObject;
         ~QtRpcServer();
-        void startListen(QHostAddress addr, int port, SocketCb cb);        
+        void startListen(QString addr, int port, SocketCb cb);        
         QVariant& getSessionField(int sid, QString k) { return sessions[sid].data[k]; }
         void setSessionField(int sid, QString k, QVariant v) { sessions[sid].data[k] = v; }
         function<void(int)> onRead;
