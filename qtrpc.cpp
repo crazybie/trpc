@@ -80,6 +80,11 @@ namespace trpc
 
     QtRpcServer::~QtRpcServer()
     {
+        close();
+    }
+
+    void QtRpcServer::close()
+    {
         if (socket) {
             socket->close();
             delete socket;

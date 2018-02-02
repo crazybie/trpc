@@ -52,6 +52,7 @@ namespace trpc
     {
     public:
         ~QtRpcServer();
+        void close();
         void startListen(QString addr, int port, SocketCb cb);        
         QVariant& getSessionField(int sid, QString k) { return sessions[sid].data[k]; }
         void setSessionField(int sid, QString k, QVariant v) { sessions[sid].data[k] = v; }
