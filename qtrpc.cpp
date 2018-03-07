@@ -83,6 +83,7 @@ namespace trpc
         if (socket) {
             socket->close();
             delete socket;
+            socket = nullptr;
         }
     }
 
