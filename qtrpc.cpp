@@ -108,20 +108,20 @@ namespace trpc
             addSession(session.sid, session.output);
 
             socket->connect(session.client, &QTcpSocket::readyRead, [this, &session] {
-                QDataStream input(session.client);
-                auto sid = session.sid;
+                QDataStream input(session.client);                
                 while ( session.client->bytesAvailable() ) {
-                    if ( !session.packageSize && session.client->bytesAvailable() >= sizeof(quint32) ) {
-                        input >> session.packageSize;   // read block size.
+                    if ( !session.packageSize && session.client->bytesAvailable() >= sizeof(session.packageSize) ) {
+                        input >> session.packageSize;
                     }
                     if ( session.packageSize && session.client->bytesAvailable() >= session.packageSize ) {
                         QDataStream s(session.client->read(session.packageSize));
+                        auto sid_copy = session.sid;
                         onReceive(session.sid, s);
                         assert(s.status() == QDataStream::Ok);
 
                         if (onRead) onRead(session.packageSize);
                         session.packageSize = 0;
-                        if (sessions.find(sid) == sessions.end()) return;
+                        if (sessions.find(sid_copy) == sessions.end()) return;
                     }
                     else {
                         break;

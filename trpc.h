@@ -23,25 +23,28 @@ namespace trpc
 
     namespace imp
     {
-
-        template<typename F, size_t... idx, typename... A>
-        auto invoke(F&& f, index_sequence<idx...>, tuple<A...>& a)
+        constexpr auto tuple_for = [](auto&& t, auto&& f) 
         {
-            return f(get<idx>(a)...);
+            return apply([&f](auto... x) { ( ..., f(x) ); }, t);
+        };
+
+        constexpr auto tuple_for_w = [](auto&& t, auto&& f) 
+        {
+            return apply([&f](auto&... x) { ( ..., f(x) ); }, t);
+        };
+
+        template <size_t Ofst, class Tuple, size_t... I>
+        constexpr auto slice_impl(Tuple&& t, index_sequence<I...>)
+        {
+            return forward_as_tuple(get<I + Ofst>(forward<Tuple>(t))...);
         }
 
-        template<int offset, typename istream, typename Tuple, size_t... idx>
-        void readTuple(istream& i, Tuple& d, index_sequence<idx...>)
+        template <size_t I1, size_t I2, class Cont>
+        constexpr auto tuple_slice(Cont&& t)
         {
-            initializer_list<int> t = { (i >> get<idx + offset>(d), 1)... };
-            (void)t;
-        }
-
-        template<typename ostream, typename Tuple, size_t... idx >
-        void writeTuple(ostream& o, Tuple& d, index_sequence<idx...>)
-        {
-            initializer_list<int> t = { (o << TPRC_DELIMITER(get<idx>(d)), 1)... };
-            (void)t;
+            static_assert( I2 >= I1, "invalid slice" );
+            static_assert( tuple_size<decay_t<Cont>>::value >= I2, "slice index out of bounds" );
+            return slice_impl<I1>(forward<Cont>(t), make_index_sequence<I2 - I1>{});
         }
 
         template<typename Idx, typename Tuple>
@@ -53,18 +56,21 @@ namespace trpc
             using type = tuple<tuple_element_t<I, Tuple>...>;
         };
 
+
+
+
         template<typename T>
-        struct FuncTrait : FuncTrait<decltype(&T::operator())>
+        struct FuncTrait : FuncTrait<decltype( &T::operator() )>
         {};
 
         template<typename R, typename C, typename... A>
-        struct FuncTrait<R(C::*)(A...)const>
+        struct FuncTrait<R(C::*)( A... )const>
         {
             using Args = tuple<A...>;
         };
 
         template<typename R, typename C, typename... A>
-        struct FuncTrait<R(C::*)(A...)>
+        struct FuncTrait<R(C::*)( A... )>
         {
             using Args = tuple<A...>;
         };
@@ -72,22 +78,12 @@ namespace trpc
         template<typename Tuple>
         struct ArgsTrait
         {
-            static const int AllArgCnt = tuple_size<Tuple>::value;
+            static constexpr auto AllArgCnt = tuple_size_v<Tuple>;
             using Args = typename tuple_elems<make_index_sequence<AllArgCnt - 1>, Tuple>::type;
             using CB = tuple_element_t<AllArgCnt - 1, Tuple>;
             using CBArgs = typename FuncTrait<CB>::Args;
         };
 
-        template<typename ostream, typename CB, typename CBArg, typename...A>
-        auto genTupleSerializer(tuple<A...>, int tag, ostream& o, CB& cb, CBArg cbArg)
-        {
-            return [&, tag, cb, cbArg](A...a) {
-                o << TPRC_DELIMITER(tag);
-                std::initializer_list<int> i = { (o << TPRC_DELIMITER(a), 1)... };
-                (void)i;
-                if (cb) cb(cbArg);
-            };
-        }
     }
 
     using SessionID = int;
@@ -111,8 +107,8 @@ namespace trpc
         Handler(string n) :name(n) {}
         virtual ~Handler() {}
 
-        virtual void init(){}
-        virtual void onDisconnected(SessionID sid){}
+        virtual void init() {}
+        virtual void onDisconnected(SessionID sid) {}
 
         void onRequest(SessionID sid, string name, istream& data, ostream& o, Signal done)
         {
@@ -120,14 +116,14 @@ namespace trpc
             funcs[name](sid, data, o, done);
         }
         template<typename C, typename R, typename... A>
-        void addFunction(string name, R(C::*mf)(A...))
+        void addFunction(string name, R(C::*mf)( A... ))
         {
             addFunction(name, [this, mf](A... a) {
-                return (static_cast<C*>(this)->*mf)(a...);
+                return ( static_cast<C*>( this )->*mf )( a... );
             });
         }
         template<typename Func>
-        void addFunction(string name, Func f)
+        void addFunction(string name, Func&& f)
         {
             using namespace imp;
             using F = ArgsTrait<typename FuncTrait<Func>::Args>;
@@ -137,10 +133,14 @@ namespace trpc
                 i >> reqID;
                 typename F::Args args;
                 get<0>(args) = sid;
-                readTuple<1>(i, args, make_index_sequence<F::AllArgCnt - 2>());
-                F::CB cb = genTupleSerializer(F::CBArgs(), reqID, o, done, sid);
-                auto args2 = tuple_cat(args, tie(cb));
-                invoke(f, make_index_sequence<F::AllArgCnt>(), args2);
+                tuple_for_w(tuple_slice<1, F::AllArgCnt - 1>(args), [&](auto& e) { i >> e; });
+
+                auto cb = [&, reqID, sid](auto... a) {
+                    o << TPRC_DELIMITER(reqID);
+                    ( ..., ( o << TPRC_DELIMITER(a) ) );
+                    if ( done ) done(sid);
+                };
+                apply(f, tuple_cat(args, make_tuple(cb)));
             };
         }
         void setServer(Server* s) { server = s; }
@@ -166,18 +166,18 @@ namespace trpc
         Signal send;
         Signal disconnected;
 
-        virtual ~RpcServer() 
+        virtual ~RpcServer()
         {
-            for (auto i : handlers) {
+            for ( auto i : handlers ) {
                 delete i.second;
             }
         }
         void addHandlers(std::initializer_list<Handler*> h)
         {
-            for (auto i : h)
+            for ( auto i : h )
                 addHandler(i);
         }
-        void addHandler(Handler* h) 
+        void addHandler(Handler* h)
         {
             handlers[h->name] = h;
         }
@@ -187,15 +187,15 @@ namespace trpc
         }
         void removeSession(SessionID sid)
         {
-            for (auto i : handlers) {
+            for ( auto i : handlers ) {
                 i.second->onDisconnected(sid);
             }
-            if (disconnected) disconnected(sid);
+            if ( disconnected ) disconnected(sid);
             sessions.erase(sid);
         }
         void onReceive(SessionID sid, istream& i)
         {
-            if (sessions.find(sid) == sessions.end()) return;
+            if ( sessions.find(sid) == sessions.end() ) return;
 
             auto& session = sessions[sid];
             auto& o = *session.output;
@@ -206,7 +206,7 @@ namespace trpc
         void initHandlers()
         {
             assert(handlers.size() && "must call addHandlers before listening.");
-            for (auto i : handlers) {
+            for ( auto i : handlers ) {
                 i.second->setServer(this);
                 i.second->init();
             }
@@ -214,12 +214,12 @@ namespace trpc
         template<typename... A>
         void pushMsg(SessionID sid, string event, A... a)
         {
-            if (sessions.find(sid) == sessions.end())return;
+            if ( sessions.find(sid) == sessions.end() )return;
 
             auto& o = *sessions[sid].output;
             o << TPRC_DELIMITER(PUSH_REQUEST_ID) << TPRC_DELIMITER(event);
-            auto t = { (o << a, 1)... };
-            if (send) send(sid);
+            ( ..., ( o << a ) );
+            if ( send ) send(sid);
         }
 
     private:
@@ -244,7 +244,7 @@ namespace trpc
 
         RpcClient(ostream& o) :output(o)
         {}
-        virtual ~RpcClient(){}
+        virtual ~RpcClient() {}
 
         // call('Auth.Login', loginName, password, [](<ArgsFromServer...>){ });
         template<typename... A>
@@ -262,42 +262,37 @@ namespace trpc
             auto args = make_tuple(a...);
             auto cb = get<F::AllArgCnt - 1>(args);
             requests[req] = [=](istream& i) {
-                typename F::CBArgs args;
-                auto idx = make_index_sequence<tuple_size<typename F::CBArgs>::value>();
-                readTuple<0>(i, args, idx);
-
+                typename F::CBArgs cbArgs;
+                tuple_for_w(cbArgs, [&](auto& a) {i >> a; });
                 bool callUser = true;
-                if (beforeResp) callUser = beforeResp(handler, func, &get<0>(args));
-                if (callUser) invoke(cb, idx, args);
+                if ( beforeResp ) callUser = beforeResp(handler, func, &get<0>(cbArgs));
+                if ( callUser ) apply(cb, cbArgs);
             };
-            writeTuple(output, args, make_index_sequence<F::AllArgCnt - 1>());
-            if (send) send();
+            tuple_for(tuple_slice<0, F::AllArgCnt - 1>(args), [&](auto& a) {output << a; });
+            if ( send ) send();
         }
 
         void onReceive(istream& i)
         {
             int requestID;
             i >> requestID;
-            if (requestID == PUSH_REQUEST_ID) {
+            if ( requestID == PUSH_REQUEST_ID ) {
                 i >> pushHandlerName;
                 pushHandlers[pushHandlerName](i);
-            }
-            else {
+            } else {
                 requests[requestID](i);
             }
             requests.erase(requestID);
         }
 
         template<typename Func>
-        void onEvent(string name, Func f)
+        void onEvent(string name, Func&& f)
         {
             pushHandlers[name] = [=](istream& input) {
                 using namespace imp;
-                using Args = typename FuncTrait<Func>::Args;
-                Args args;
-                auto idx = make_index_sequence<tuple_size<Args>::value>();
-                readTuple<0>(input, args, idx);
-                invoke(f, idx, args);
+                typename FuncTrait<Func>::Args args;
+                tuple_for_w(args, [&](auto& a) {input >> a; });
+                apply(f, args);
             };
         }
 

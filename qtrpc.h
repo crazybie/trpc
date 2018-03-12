@@ -31,11 +31,12 @@ namespace trpc
     {
     public:
         QtRpcClient():  RpcClient(output){}
+        ~QtRpcClient() { close(); }
+        
         void connectServer(QString ip, int port, SocketCb cb);
         bool isConnected() { return mIsConnected; }
         QAbstractSocket::SocketError getSocketError() { return socketError; }
-        void close();
-        ~QtRpcClient() { close(); }
+        void close();        
         QTcpSocket* getSocket() { return socket; }
         function<void(int)> onRead;
     private:
@@ -81,6 +82,7 @@ namespace trpc
         using RpcHandler<T,QDataStream>::RpcHandler;
 
         QtRpcHandler(string name): RpcHandler(name){}
+        
         QtRpcServer* getServer() {  return static_cast<QtRpcServer*>(server); }
         QVariant& getSessionField(SessionID sid, QString f) {  return getServer()->getSessionField(sid, f);  }
         void setSessionField(int sid, QString k, QVariant v) { getServer()->setSessionField(sid, k, v); }
