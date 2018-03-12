@@ -25,11 +25,6 @@ namespace trpc
     {
         constexpr auto tuple_for = [](auto&& t, auto&& f) 
         {
-            return apply([&f](auto... x) { ( ..., f(x) ); }, t);
-        };
-
-        constexpr auto tuple_for_w = [](auto&& t, auto&& f) 
-        {
             return apply([&f](auto&... x) { ( ..., f(x) ); }, t);
         };
 
@@ -133,7 +128,7 @@ namespace trpc
                 i >> reqID;
                 typename F::Args args;
                 get<0>(args) = sid;
-                tuple_for_w(tuple_slice<1, F::AllArgCnt - 1>(args), [&](auto& e) { i >> e; });
+                tuple_for(tuple_slice<1, F::AllArgCnt - 1>(args), [&](auto& e) { i >> e; });
 
                 auto cb = [&, reqID, sid](auto... a) {
                     o << TPRC_DELIMITER(reqID);
@@ -263,7 +258,7 @@ namespace trpc
             auto cb = get<F::AllArgCnt - 1>(args);
             requests[req] = [=](istream& i) {
                 typename F::CBArgs cbArgs;
-                tuple_for_w(cbArgs, [&](auto& a) {i >> a; });
+                tuple_for(cbArgs, [&](auto& a) {i >> a; });
                 bool callUser = true;
                 if ( beforeResp ) callUser = beforeResp(handler, func, &get<0>(cbArgs));
                 if ( callUser ) apply(cb, cbArgs);
@@ -291,7 +286,7 @@ namespace trpc
             pushHandlers[name] = [=](istream& input) {
                 using namespace imp;
                 typename FuncTrait<Func>::Args args;
-                tuple_for_w(args, [&](auto& a) {input >> a; });
+                tuple_for(args, [&](auto& a) {input >> a; });
                 apply(f, args);
             };
         }
