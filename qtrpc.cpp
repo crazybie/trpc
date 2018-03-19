@@ -106,6 +106,8 @@ namespace trpc
             session.sid = sessionID++;
             session.client = socket->nextPendingConnection();
             addSession(session.sid, session.output);
+            // set build-in session info
+            setSessionField(session.sid, "host", session.client->localAddress().toString());
 
             socket->connect(session.client, &QTcpSocket::readyRead, [this, &session] {
                 QDataStream input(session.client);                

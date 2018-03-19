@@ -55,7 +55,7 @@ namespace trpc
         ~QtRpcServer();
         void close();
         void startListen(QString addr, int port, SocketCb cb);        
-        QVariant& getSessionField(int sid, QString k) { return sessions[sid].data[k]; }
+        QVariant getSessionField(int sid, QString k) { return sessions[sid].data[k]; }
         void setSessionField(int sid, QString k, QVariant v) { sessions[sid].data[k] = v; }
         function<void(int)> onRead;
     private:
@@ -84,7 +84,7 @@ namespace trpc
         QtRpcHandler(string name): RpcHandler(name){}
         
         QtRpcServer* getServer() {  return static_cast<QtRpcServer*>(server); }
-        QVariant& getSessionField(SessionID sid, QString f) {  return getServer()->getSessionField(sid, f);  }
+        QVariant getSessionField(SessionID sid, QString f) {  return getServer()->getSessionField(sid, f);  }
         void setSessionField(int sid, QString k, QVariant v) { getServer()->setSessionField(sid, k, v); }
     };
 
