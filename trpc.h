@@ -5,12 +5,10 @@
 // All rights reserved.
 //
 #pragma once
-#include <assert.h>
 #include <functional>
 #include <map>
 #include <string>
 #include <tuple>
-#include <vector>
 
 //#define TPRC_DELIMITER(n)  n << ' '
 #ifndef TPRC_DELIMITER
@@ -26,6 +24,7 @@ using std::tuple;
 
 namespace imp {
 using namespace std;
+
 /// tuple helpers
 
 constexpr auto tuple_for = [](auto&& t, auto&& f) {
@@ -82,6 +81,13 @@ struct ArgsTrait {
 using SessionID = int;
 using SessionCb = function<void(SessionID)>;
 
+enum class RequestType : int {
+  Notify = 1,
+  Call,
+  CallResponse,
+  UserRequest,
+};
+
 template <typename... A>
 using RespCb = function<void(A...)>;
 
@@ -102,13 +108,8 @@ class Handler {
   virtual void init() {}
   virtual void onDisconnected(SessionID sid) {}
 
-  void onRequest(SessionID sid,
-                 string name,
-                 int reqId,
-                 istream& data,
-                 ostream& o) {
-    assert(funcs[name]);
-    funcs[name](sid, reqId, data, o);
+  void onRequest(SessionID sid, string name, int rid, istream& i, ostream& o) {
+    funcs[name](sid, rid, i, o);
   }
 
   template <typename C, typename R, typename... A>
@@ -147,13 +148,6 @@ class Handler {
   map<string, Func> funcs;
 };
 
-enum RequestType {
-  PUSH_REQUEST_ID = 1,
-  CALL_REQUEST_ID,
-  CALL_RESPONSE_ID,
-  NORMAL_REUQEST_ID,
-};
-
 template <typename istream, typename ostream = istream>
 class RpcServer {
  public:
@@ -176,7 +170,11 @@ class RpcServer {
       i.second->init();
     }
   }
-  void addSession(SessionID sid, ostream& o) { sessions[sid] = {sid, &o}; }
+  void addSession(SessionID sid, ostream& o) {
+    auto& s = sessions[sid];
+    s.sid = sid;
+    s.output = &o;
+  }
 
   void removeSession(SessionID sid) {
     for (auto i : handlers) {
@@ -195,13 +193,12 @@ class RpcServer {
     auto& o = *session.output;
     int reqID;
     i >> reqID;
-    if (reqID == CALL_RESPONSE_ID) {
+    if (reqID == (int)RequestType::CallResponse) {
       i >> reqID;
       session.requests[reqID](i);
       session.requests.erase(reqID);
     } else {
       i >> handler >> func;
-      assert(handlers[handler]);
       handlers[handler]->onRequest(sid, func, reqID, i, o);
     }
   }
@@ -212,7 +209,7 @@ class RpcServer {
       return;
 
     auto& o = *sessions[sid].output;
-    o << TPRC_DELIMITER(PUSH_REQUEST_ID) << TPRC_DELIMITER(msg);
+    o << TPRC_DELIMITER((int)RequestType::Notify) << TPRC_DELIMITER(msg);
     (..., (o << TPRC_DELIMITER(a)));
     flush(sid);
   }
@@ -227,14 +224,15 @@ class RpcServer {
 
     auto& session = sessions[sid];
     auto& o = *session.output;
+    auto&& args = make_tuple(a...);
+    auto&& cb = get<F::AllArgCnt - 1>(args);
+
     auto req = session.nextRequestID++;
-    o << TPRC_DELIMITER(CALL_REQUEST_ID) << TPRC_DELIMITER(name)
+    o << TPRC_DELIMITER((int)RequestType::Call) << TPRC_DELIMITER(name)
       << TPRC_DELIMITER(req);
-    auto args = make_tuple(a...);
     tuple_for(tuple_slice<0, F::AllArgCnt - 1>(args),
               [&](auto& a) { o << TPRC_DELIMITER(a); });
 
-    auto&& cb = get<F::AllArgCnt - 1>(args);
     session.requests[req] = [=](istream& i) {
       typename F::CbArgs cbArgs;
       tuple_for(cbArgs, [&](auto& a) { i >> a; });
@@ -246,15 +244,15 @@ class RpcServer {
 
  private:
   struct Session {
+    using Func = function<void(istream& i)>;
     SessionID sid;
     ostream* output;
-    int nextRequestID = NORMAL_REUQEST_ID;
-    using Func = function<void(istream& i)>;
+    int nextRequestID = (int)RequestType::UserRequest;
     map<int, Func> requests;
   };
   map<SessionID, Session> sessions;
   map<string, Handler*> handlers;
-  string func, handler;  // 保存下来好调试
+  string func, handler;  // for debugging
 };
 
 template <typename istream, typename ostream = istream>
@@ -266,7 +264,7 @@ class RpcClient {
   RpcClient(ostream& o) : output(o) {}
   virtual ~RpcClient() {}
 
-  // call('Auth.Login', loginName, password, [](<ArgsFromServer...>){ });
+  // Usage: call("Auth.Login", loginName, password, [](Result a, ...){ });
   template <typename... A>
   void call(string name, A... a) {
     using namespace imp;
@@ -298,10 +296,10 @@ class RpcClient {
   void onReceive(istream& i) {
     int requestID;
     i >> requestID;
-    if (requestID == PUSH_REQUEST_ID) {
+    if (requestID == (int)RequestType::Notify) {
       i >> handlerName;
       notifyHandlers[handlerName](i);
-    } else if (requestID == CALL_REQUEST_ID) {
+    } else if (requestID == (int)RequestType::Call) {
       int req;
       i >> handlerName >> req;
       callHandlers[handlerName](req, i);
@@ -330,7 +328,8 @@ class RpcClient {
 
       tuple_for(args, [&](auto& a) { input >> a; });
       auto&& cb = [=](auto... a) {
-        output << TPRC_DELIMITER(CALL_RESPONSE_ID) << TPRC_DELIMITER(reqID);
+        output << TPRC_DELIMITER((int)RequestType::CallResponse)
+               << TPRC_DELIMITER(reqID);
         (..., (output << TPRC_DELIMITER(a)));
         flush();
       };
@@ -340,15 +339,17 @@ class RpcClient {
 
  private:
   using Func = function<void(istream& i)>;
+
   map<int, Func> requests;
   map<string, function<void(istream&)>> notifyHandlers;
   map<string, function<void(int, istream&)>> callHandlers;
-  int nextRequestID = NORMAL_REUQEST_ID;
+  int nextRequestID = (int)RequestType::UserRequest;
   ostream& output;
   string handlerName;
 };
 
 //-----------------------------------------------------------------
+// Helper
 
 template <typename T, typename istream, typename ostream = istream>
 class RpcHandler : public Handler<istream, ostream> {

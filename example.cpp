@@ -1,9 +1,6 @@
-﻿// ConsoleApplication6.cpp : This file contains the 'main' function. Program
-// execution begins and ends there.
-//
+﻿#include "pch.h"
 
-#include "pch.h"
-
+#include <assert.h>
 #include <iostream>
 #include <sstream>
 
@@ -11,6 +8,7 @@
 #include "trpc.h"
 
 using namespace trpc;
+int pass = 0;
 
 class MyRpc : public RpcHandler<MyRpc, std::iostream> {
  public:
@@ -33,6 +31,7 @@ class MyRpc : public RpcHandler<MyRpc, std::iostream> {
     server->call(sid, "clientFunc", 11, 2, [](string msg, int r) {
       assert(msg == "fromClient");
       assert(r == 11 * 2);
+      pass++;
     });
   }
 };
@@ -68,11 +67,13 @@ int main() {
     client.onNotify("onAdd", [=](string msg, int a, int b) {
       assert(msg == "msgFromServer");
       assert(a == data_a && b == data_b);
+      pass++;
     });
 
     client.call("MyRpc.add", data_a, data_b, [=](string msg, int result) {
       assert(msg == "OK");
       assert(result == data_a + data_b);
+      pass++;
     });
   }
 
@@ -81,12 +82,16 @@ int main() {
     client.onNotify("onReduceFloat", [=](string msg, float a, float b) {
       assert(msg == "msgFromServer");
       assert(a == data_a && b == data_b);
+      pass++;
     });
 
     client.call("MyRpc.reduceFloat", data_a, data_b,
                 [=](string msg, float result) {
                   assert(msg == "OK");
                   assert(result == data_a - data_b);
+                  pass++;
                 });
   }
+
+  std::cout << "PASS:" << pass << std::endl;
 }
