@@ -2,6 +2,8 @@
 // by soniced@sina.com.
 // All rights reserved.
 //
+#include "pch.h"
+
 #include "qtrpc.h"
 
 namespace trpc {

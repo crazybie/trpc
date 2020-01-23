@@ -25,6 +25,7 @@ using std::tuple;
 namespace imp {
 using namespace std;
 
+//////////////////////////////////////////////////////////////////////////
 /// tuple helpers
 
 constexpr auto tuple_for = [](auto&& t, auto&& f) {
@@ -52,6 +53,7 @@ struct tuple_elems<index_sequence<I...>, Tuple> {
   using type = tuple<tuple_element_t<I, Tuple>...>;
 };
 
+//////////////////////////////////////////////////////////////////////////
 /// function helpers
 
 template <typename T>
@@ -60,11 +62,13 @@ struct FuncTrait : FuncTrait<decltype(&T::operator())> {};
 template <typename R, typename C, typename... A>
 struct FuncTrait<R (C::*)(A...) const> {
   using Args = tuple<A...>;
+  using Result = R;
 };
 
 template <typename R, typename C, typename... A>
 struct FuncTrait<R (C::*)(A...)> {
   using Args = tuple<A...>;
+  using Result = R;
 };
 
 template <typename T, class = void_t<>>
@@ -84,6 +88,21 @@ struct ArgsTrait {
   using Cb = tuple_element_t<Cnt - 1, Tuple>;
   using CbArgs = typename FuncTrait<Cb>::Args;
 };
+
+//////////////////////////////////////////////////////////////////////////
+template <typename E,
+          typename S,
+          typename = std::enable_if_t<std::is_enum_v<E>>>
+S& operator>>(S& s, E& e) {
+  return s >> (std::underlying_type_t<E>&)(e);
+}
+
+template <typename E,
+          typename S,
+          typename = std::enable_if_t<std::is_enum_v<E>>>
+S& operator<<(S& s, E e) {
+  return s << (std::underlying_type_t<E>)(e);
+}
 
 }  // namespace imp
 

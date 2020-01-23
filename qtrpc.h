@@ -5,21 +5,12 @@
 // All rights reserved.
 //
 #pragma once
-#include <QtNetwork/QtNetwork>
+
+#include "qtrpcHelper.h"
+
 #include "trpc.h"
 
 namespace trpc {
-inline QDataStream& operator>>(QDataStream& s, std::string& v) {
-  char* p;
-  s >> p;
-  v = p;
-  delete[] p;
-  return s;
-}
-
-inline QDataStream& operator<<(QDataStream& s, std::string& v) {
-  return s << v.c_str();
-}
 
 using SocketCb = std::function<void(bool, QAbstractSocket::SocketError)>;
 
@@ -72,11 +63,11 @@ class QtRpcServer : public RpcServer<QDataStream> {
 template <typename T>
 class QtRpcHandler : public RpcHandler<T, QDataStream> {
  public:
-  using RpcHandler<T, QDataStream>::RpcHandler;
+  QtRpcHandler(string name) : RpcHandler<T, QDataStream>(name) {}
 
-  QtRpcHandler(string name) : RpcHandler(name) {}
-
-  QtRpcServer* getServer() { return static_cast<QtRpcServer*>(server); }
+  QtRpcServer* getServer() {
+    return static_cast<QtRpcServer*>(RpcHandler::server);
+  }
   QVariant getSessionField(SessionID sid, QString f) {
     return getServer()->getSessionField(sid, f);
   }
