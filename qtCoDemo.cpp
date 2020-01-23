@@ -145,29 +145,12 @@ class Test {
     CoEnd();
   }
 
-  //////////////////////////////////////////////////////////////////////////
-  // wrap to promise
-
   PromisePtr<int> myRpcAdd(int a, int b) {
-    PromisePtr<int> pro;
-    int result;
-    CoBegin(int) {
-      pro = P(int, rpcClient.call("MyRpc.add", a, b, cb));
-      CoAwaitData(result, pro);
-      CoReturn(result);
-    }
-    CoEnd();
+    return P(int, rpcClient.call("MyRpc.add", a, b, cb));
   }
 
   PromisePtr<float> myRpcMultiple(float a, float b) {
-    PromisePtr<float> pro;
-    int result;
-    CoBegin(float) {
-      pro = P(float, rpcClient.call("MyRpc.multiple", a, b, cb));
-      CoAwaitData(result, pro);
-      CoReturn(result);
-    }
-    CoEnd();
+    return P(float, rpcClient.call("MyRpc.multiple", a, b, cb));
   }
 };
 
