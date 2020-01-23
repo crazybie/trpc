@@ -1,6 +1,6 @@
 #include "pch.h"
 
-#include <QtWidgets/QApplication>
+#include <QtCore/QCoreApplication>
 #include "qtrpc.h"
 
 using namespace trpc;
@@ -15,7 +15,7 @@ class MyRpc : public QtRpcHandler<MyRpc> {
 };
 
 int main(int argc, char* argv[]) {
-  QApplication app(argc, argv);
+  QCoreApplication app(argc, argv);
 
   QtRpcServer server;
   server.addHandlers({new MyRpc});

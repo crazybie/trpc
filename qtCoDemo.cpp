@@ -1,6 +1,6 @@
 #include "pch.h"
 
-#include <QtWidgets/QApplication>
+#include <QtCore/QCoreApplication>
 
 #include "coroutine.h"  // from https://github.com/crazybie/co
 #include "qtrpc.h"
@@ -172,7 +172,7 @@ class Test {
 };
 
 int main(int argc, char* argv[]) {
-  QApplication app(argc, argv);
+  QCoreApplication app(argc, argv);
 
   co::Executor executor;
 
