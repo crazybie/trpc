@@ -67,12 +67,21 @@ struct FuncTrait<R (C::*)(A...)> {
   using Args = tuple<A...>;
 };
 
+template <typename T, class = void_t<>>
+struct is_lambda : false_type {};
+
+template <typename T>
+struct is_lambda<T, void_t<decltype(&T::operator())>> : true_type {};
+
+template <typename T>
+constexpr bool is_lambda_v = is_lambda<T>::value;
+
 template <typename Tuple>
 struct ArgsTrait {
-  static constexpr auto AllArgCnt = tuple_size_v<Tuple>;
+  static constexpr auto Cnt = tuple_size_v<Tuple>;
   using ArgsNoCb =
-      typename tuple_elems<make_index_sequence<AllArgCnt - 1>, Tuple>::type;
-  using Cb = tuple_element_t<AllArgCnt - 1, Tuple>;
+      typename tuple_elems<make_index_sequence<Cnt - 1>, Tuple>::type;
+  using Cb = tuple_element_t<Cnt - 1, Tuple>;
   using CbArgs = typename FuncTrait<Cb>::Args;
 };
 
@@ -122,13 +131,19 @@ class Handler {
   template <typename Func>
   void addFunction(string name, Func&& f) {
     using namespace imp;
-    using F = ArgsTrait<typename FuncTrait<Func>::Args>;
+    using Args = typename FuncTrait<Func>::Args;
+    using F = ArgsTrait<Args>;
+
+    static_assert(is_same_v<tuple_element_t<0, Args>, SessionID>,
+                  "first param should be a SessionID");
+    static_assert(is_lambda_v<tuple_element_t<tuple_size_v<Args> - 1, Args>>,
+                  "last param should be a lambda");
 
     funcs[name] = [=](SessionID sid, int reqID, istream& i, ostream& o) {
       typename F::ArgsNoCb args;
+
       get<0>(args) = sid;
-      tuple_for(tuple_slice<1, F::AllArgCnt - 1>(args),
-                [&](auto& e) { i >> e; });
+      tuple_for(tuple_slice<1, F::Cnt - 1>(args), [&](auto& e) { i >> e; });
 
       auto&& cb = [=, &o](auto... a) {
         o << TPRC_DELIMITER(reqID);
@@ -217,7 +232,11 @@ class RpcServer {
   template <typename... A>
   void call(SessionID sid, string name, A... a) {
     using namespace imp;
-    using F = ArgsTrait<tuple<A...>>;
+    using Args = tuple<A...>;
+    using F = ArgsTrait<Args>;
+
+    static_assert(is_lambda_v<tuple_element_t<tuple_size_v<Args> - 1, Args>>,
+                  "last param should be a lambda");
 
     if (sessions.find(sid) == sessions.end())
       return;
@@ -225,12 +244,12 @@ class RpcServer {
     auto& session = sessions[sid];
     auto& o = *session.output;
     auto&& args = make_tuple(a...);
-    auto&& cb = get<F::AllArgCnt - 1>(args);
+    auto&& cb = get<F::Cnt - 1>(args);
 
     auto req = session.nextRequestID++;
     o << TPRC_DELIMITER((int)RequestType::Call) << TPRC_DELIMITER(name)
       << TPRC_DELIMITER(req);
-    tuple_for(tuple_slice<0, F::AllArgCnt - 1>(args),
+    tuple_for(tuple_slice<0, F::Cnt - 1>(args),
               [&](auto& a) { o << TPRC_DELIMITER(a); });
 
     session.requests[req] = [=](istream& i) {
@@ -268,7 +287,11 @@ class RpcClient {
   template <typename... A>
   void call(string name, A... a) {
     using namespace imp;
-    using F = ArgsTrait<tuple<A...>>;
+    using Args = tuple<A...>;
+    using F = ArgsTrait<Args>;
+
+    static_assert(is_lambda_v<tuple_element_t<tuple_size_v<Args> - 1, Args>>,
+                  "last param should be a lambda");
 
     auto dot = name.find_first_of('.');
     auto handler = name.substr(0, dot);
@@ -278,7 +301,7 @@ class RpcClient {
            << TPRC_DELIMITER(func);
 
     auto args = make_tuple(a...);
-    auto cb = get<F::AllArgCnt - 1>(args);
+    auto cb = get<F::Cnt - 1>(args);
     requests[req] = [=](istream& i) {
       typename F::CbArgs cbArgs;
       tuple_for(cbArgs, [&](auto& a) { i >> a; });
@@ -288,7 +311,7 @@ class RpcClient {
       if (callUser)
         apply(cb, cbArgs);
     };
-    tuple_for(tuple_slice<0, F::AllArgCnt - 1>(args),
+    tuple_for(tuple_slice<0, F::Cnt - 1>(args),
               [&](auto& a) { output << TPRC_DELIMITER(a); });
     flush();
   }
@@ -323,9 +346,13 @@ class RpcClient {
   void onCall(string name, Func&& f) {
     callHandlers[name] = [=](int reqID, istream& input) {
       using namespace imp;
-      using F = ArgsTrait<typename FuncTrait<Func>::Args>;
-      typename F::ArgsNoCb args;
+      using Args = typename FuncTrait<Func>::Args;
+      using F = ArgsTrait<Args>;
 
+      static_assert(is_lambda_v<tuple_element_t<tuple_size_v<Args> - 1, Args>>,
+                    "last param should be a lambda");
+
+      typename F::ArgsNoCb args;
       tuple_for(args, [&](auto& a) { input >> a; });
       auto&& cb = [=](auto... a) {
         output << TPRC_DELIMITER((int)RequestType::CallResponse)
