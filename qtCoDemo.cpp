@@ -54,6 +54,11 @@ auto toNetworkCb(F f) {
   };
 }
 
+template <typename R, typename T, typename... Args>
+PromisePtr<R> callServer(T& c, string func, Args... args) {
+  return promised<R>([&](auto cb) { c.call(func, args..., cb); });
+}
+
 //////////////////////////////////////////////////////////////////////////
 
 class MyRpc : public QtRpcHandler<MyRpc> {
@@ -94,63 +99,29 @@ class Test {
           P(bool, rpcClient.connectServer("localhost", port, toNetworkCb(cb))));
       puts("client connected");
 
-      CoAwait(testAdapterCo());
-      CoAwait(testNativeCo());
+      CoAwait(tests());
       CoReturn(true);
     }
     CoEnd();
   }
 
-  PromisePtr<bool> testAdapterCo() {
-    PromisePtr<int> intPro;
+  PromisePtr<bool> tests() {
     int result;
-
-    PromisePtr<float> floatPro;
     float floatResult;
 
     CoBegin(bool) {
-      intPro = P(int, rpcClient.call("MyRpc.add", 1, 2, cb));
-      CoAwaitData(result, intPro);
+      CoAwaitData(result, callServer<int>(rpcClient, "MyRpc.add", 1, 2));
       assert(result == 1 + 2);
       pass++;
 
-      floatPro = P(float, rpcClient.call("MyRpc.multiple", 3.0f, 4.0f, cb));
-      CoAwaitData(floatResult, floatPro);
+      CoAwaitData(floatResult,
+                  callServer<float>(rpcClient, "MyRpc.multiple", 3.0f, 4.0f));
       assert(floatResult == 3.0f * 4.0f);
       pass++;
 
       CoReturn(true);
     }
     CoEnd();
-  }
-
-  //////////////////////////////////////////////////////////////////////////
-  // call RPC from promise: much simpler
-
-  PromisePtr<bool> testNativeCo() {
-    int intResult;
-    float floatResult;
-
-    CoBegin(bool) {
-      CoAwaitData(intResult, myRpcAdd(1, 2));
-      assert(intResult == 1 + 2);
-      pass++;
-
-      CoAwaitData(floatResult, myRpcMultiple(3.0f, 4.0f));
-      assert(floatResult == 3.0f * 4.0f);
-      pass++;
-
-      CoReturn(true);
-    }
-    CoEnd();
-  }
-
-  PromisePtr<int> myRpcAdd(int a, int b) {
-    return P(int, rpcClient.call("MyRpc.add", a, b, cb));
-  }
-
-  PromisePtr<float> myRpcMultiple(float a, float b) {
-    return P(float, rpcClient.call("MyRpc.multiple", a, b, cb));
   }
 };
 
