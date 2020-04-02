@@ -305,9 +305,9 @@ class AsioServer : public RpcServer<MemIStream, MemOStream> {
   void update() { ctx.poll(); }
 
  private:
+  asio::io_context ctx;
   map<SessionID, Session> sessions;
   SessionID sessionID = 100;
-  asio::io_context ctx;
   unique_ptr<tcp::acceptor> acc;
 };
 
