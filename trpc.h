@@ -1,9 +1,10 @@
-//
-// tiny rpc framework
+//////////////////////////////////////////////////////////////////////////
+// Tiny RPC framework
 //
 // by soniced@sina.com.
 // All rights reserved.
-//
+//////////////////////////////////////////////////////////////////////////
+
 #pragma once
 #include <functional>
 #include <map>
@@ -122,6 +123,8 @@ using RespCb = function<void(A...)>;
 template <typename istream, typename ostream>
 class RpcServer;
 
+//////////////////////////////////////////////////////////////////////////
+
 template <typename istream, typename ostream = istream>
 class Handler {
  public:
@@ -182,6 +185,8 @@ class Handler {
   map<string, Func> funcs;
 };
 
+//////////////////////////////////////////////////////////////////////////
+
 template <typename istream, typename ostream = istream>
 class RpcServer {
  public:
@@ -232,7 +237,8 @@ class RpcServer {
       session.requests[reqID](i);
       session.requests.erase(reqID);
     } else {
-      i >> handler >> func;
+      i >> handler;
+      i >> func;
       handlers[handler]->onRequest(sid, func, reqID, i, o);
     }
   }
@@ -243,7 +249,8 @@ class RpcServer {
       return;
 
     auto& o = *sessions[sid].output;
-    o << TPRC_DELIMITER((int)RequestType::Notify) << TPRC_DELIMITER(msg);
+    o << TPRC_DELIMITER((int)RequestType::Notify);
+    o << TPRC_DELIMITER(msg);
     (..., (o << TPRC_DELIMITER(a)));
     flush(sid);
   }
@@ -266,8 +273,9 @@ class RpcServer {
     auto&& cb = get<F::Cnt - 1>(args);
 
     auto req = session.nextRequestID++;
-    o << TPRC_DELIMITER((int)RequestType::Call) << TPRC_DELIMITER(name)
-      << TPRC_DELIMITER(req);
+    o << TPRC_DELIMITER((int)RequestType::Call);
+    o << TPRC_DELIMITER(name);
+    o << TPRC_DELIMITER(req);
     tuple_for(tuple_slice<0, F::Cnt - 1>(args),
               [&](auto& a) { o << TPRC_DELIMITER(a); });
 
@@ -293,6 +301,8 @@ class RpcServer {
   string func, handler;  // for debugging
 };
 
+//////////////////////////////////////////////////////////////////////////
+
 template <typename istream, typename ostream = istream>
 class RpcClient {
  public:
@@ -316,8 +326,9 @@ class RpcClient {
     auto handler = name.substr(0, dot);
     auto func = name.substr(dot + 1);
     auto req = nextRequestID++;
-    output << TPRC_DELIMITER(req) << TPRC_DELIMITER(handler)
-           << TPRC_DELIMITER(func);
+    output << TPRC_DELIMITER(req);
+    output << TPRC_DELIMITER(handler);
+    output << TPRC_DELIMITER(func);
 
     auto args = make_tuple(a...);
     auto cb = get<F::Cnt - 1>(args);
@@ -343,7 +354,8 @@ class RpcClient {
       notifyHandlers[handlerName](i);
     } else if (requestID == (int)RequestType::Call) {
       int req;
-      i >> handlerName >> req;
+      i >> handlerName;
+      i >> req;
       callHandlers[handlerName](req, i);
     } else {
       requests[requestID](i);
@@ -374,8 +386,8 @@ class RpcClient {
       typename F::ArgsNoCb args;
       tuple_for(args, [&](auto& a) { input >> a; });
       auto&& cb = [=](auto... a) {
-        output << TPRC_DELIMITER((int)RequestType::CallResponse)
-               << TPRC_DELIMITER(reqID);
+        output << TPRC_DELIMITER((int)RequestType::CallResponse);
+        output << TPRC_DELIMITER(reqID);
         (..., (output << TPRC_DELIMITER(a)));
         flush();
       };
